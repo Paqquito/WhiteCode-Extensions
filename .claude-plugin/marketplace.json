@@ -1,0 +1,21 @@
+{
+  "name": "whitecode-extensions",
+  "owner": {
+    "name": "WhiteCode"
+  },
+  "metadata": {
+    "description": "Plugins officiels de WhiteCode."
+  },
+  "plugins": [
+    {
+      "name": "whitecode-office",
+      "displayName": "Bureautique",
+      "source": "./plugins/office",
+      "version": "1.0.0",
+      "description": "Bureautique : créer des documents Word, des classeurs Excel, des présentations PowerPoint et des PDF. Bibliothèques incluses, sans installation.",
+      "category": "Bureautique",
+      "license": "MIT",
+      "tags": ["recommended"]
+    }
+  ]
+}

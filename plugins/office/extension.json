@@ -1,0 +1,6 @@
+{
+  "name": "whitecode-office",
+  "version": "1.0.0",
+  "description": "Création de documents Word, Excel, PowerPoint et PDF avec les bibliothèques de whitecode.",
+  "components": { "skills": "skills" }
+}

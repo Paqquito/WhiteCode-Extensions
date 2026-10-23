@@ -1,0 +1,20 @@
+const { resolve } = require('node:path');
+const { writeFile } = require('node:fs/promises');
+module.exports = async ({ ExcelJS }) => {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'WhiteCode';
+  workbook.calcProperties.fullCalcOnLoad = true;
+  const sheet = workbook.addWorksheet('Budget');
+  sheet.columns = [{header:'Poste',key:'poste',width:30},{header:'Montant (€)',key:'montant',width:20}];
+  sheet.addRows([{poste:'Matériel',montant:1200},{poste:'Services',montant:800}]);
+  sheet.addRow(['Total',{formula:'SUM(B2:B3)',result:2000}]);
+  sheet.getColumn(2).numFmt = '#,##0.00';
+  sheet.getRow(1).font = {bold:true,color:{argb:'FFFFFFFF'}};
+  sheet.getRow(1).fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FF005A85'}};
+  sheet.views = [{state:'frozen',ySplit:1}];
+  const output = resolve('budget.xlsx');
+  await writeFile(output, await workbook.xlsx.writeBuffer(), {flag:'wx'});
+  const check = new ExcelJS.Workbook(); await check.xlsx.readFile(output);
+  if (check.getWorksheet('Budget').getCell('B4').value.result !== 2000) throw Error('Total invalide');
+  console.log(output);
+};

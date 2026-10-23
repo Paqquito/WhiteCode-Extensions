@@ -1,0 +1,26 @@
+{
+  "name": "whitecode-extensions",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Plugins de WhiteCode (catalogue WhiteCode-Extensions) et personnalisations de la distribution whitecode.",
+  "scripts": {
+    "build:office": "bun run scripts/build-office.ts",
+    "test": "bun test plugins"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.0",
+    "docx": "9.7.1",
+    "exceljs": "4.4.0",
+    "jszip": "3.10.2",
+    "pdf-lib": "1.17.1",
+    "pptxgenjs": "4.0.1"
+  },
+  "overrides": {
+    "exceljs": {
+      "uuid": "11.1.1"
+    },
+    "pptxgenjs": {
+      "image-size": "2.0.3"
+    }
+  }
+}
