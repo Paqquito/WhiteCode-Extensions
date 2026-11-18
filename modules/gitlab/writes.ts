@@ -71,8 +71,8 @@ export async function prepareWrite(call: GitLabCall, input: WriteForm): Promise<
   if (input.action === 'create') {
     const source = text(input.source, 255), target = text(input.target, 255)
     if (source === target) throw Error('Les deux branches doivent être différentes.')
-    const [branch, destination] = await Promise.all([source, target].map(async name =>
-      object(await call(project + '/repository/branches/' + encodeURIComponent(name)))))
+    const readBranch = async (name: string) => object(await call(project + '/repository/branches/' + encodeURIComponent(name)))
+    const [branch, destination] = await Promise.all([readBranch(source), readBranch(target)])
     return { label: 'Créer la demande de fusion', path: collection, method: 'POST', revision: hash(branch.commit?.id), targetRevision: hash(destination.commit?.id),
       body: { ...mrFields(input), source_branch: source, target_branch: target } }
   }
