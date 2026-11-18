@@ -60,6 +60,7 @@ test('un lot garde les décisions ouvertes, les réserves et les données de la 
     const operators = contents.asArray().map(ref => Buffer.from(decodePDFRawStream(pdf.context.lookup(ref, PDFRawStream)).decode()).toString('latin1')).join('')
     const pdfText = Array.from(operators.matchAll(/<([0-9a-f]+)> Tj/gi), match => Buffer.from(match[1]!, 'hex').toString('latin1')).join(' ')
     for (const text of [await xml('note.docx', 'word/document.xml'), await xml('revue.pptx', 'ppt/slides/slide2.xml'), JSON.stringify(book.getWorksheet('Source')!.getSheetValues()), pdfText]) {
+      expect(text.split('[ ]')).toHaveLength(2)
       for (const fact of ['[ ]', 'Valider le lot A.', 'Ne pas ouvrir le lot B avant accord.']) expect(text).toContain(fact)
     }
     await expect(batch('nouveau.pdf', 'lots.xlsx')).rejects.toThrow('EEXIST')

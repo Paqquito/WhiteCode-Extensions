@@ -7,6 +7,7 @@ type Block = { kind: 'heading' | 'text'; text: string } | { kind: 'table'; rows:
 
 function inline(tokens: Token[]): string {
   return tokens.map(token => {
+    if (token.type === 'checkbox') return ''
     if (token.type === 'br') return '\n'
     if (token.type === 'image') return token.text || token.href
     if ('tokens' in token && token.tokens) return inline(token.tokens)
@@ -17,7 +18,7 @@ function inline(tokens: Token[]): string {
 function blocks(tokens: Token[]): Block[] {
   const result: Block[] = []
   for (const token of tokens) {
-    if (['space', 'def', 'hr'].includes(token.type)) continue
+    if (['space', 'def', 'hr', 'checkbox'].includes(token.type)) continue
     if (token.type === 'table') {
       result.push({ kind: 'table', rows: [token.header, ...token.rows].map(row => row.map((c: Tokens.TableCell) => inline(c.tokens))) })
     } else if (token.type === 'list') {

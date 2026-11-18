@@ -7,6 +7,7 @@ const headings = [HeadingLevel.HEADING_1, HeadingLevel.HEADING_2, HeadingLevel.H
 function inline(tokens: Token[], style: IRunOptions = {}): Inline[] {
   return tokens.flatMap<Inline>(token => {
     switch (token.type) {
+      case 'checkbox': return []
       case 'strong': return inline(token.tokens, { ...style, bold: true })
       case 'em': return inline(token.tokens, { ...style, italics: true })
       case 'del': return inline(token.tokens, { ...style, strike: true })
@@ -32,7 +33,7 @@ function tableRow(cells: Tokens.TableCell[], header: boolean): TableRow {
 function blocks(tokens: Token[], depth = 0): Array<Paragraph | Table> {
   return tokens.flatMap<Paragraph | Table>(token => {
     switch (token.type) {
-      case 'space': case 'def': return []
+      case 'space': case 'def': case 'checkbox': return []
       case 'heading': return [new Paragraph({ heading: headings[token.depth - 1], children: inline(token.tokens) })]
       case 'blockquote': return blocks(token.tokens, depth)
       case 'code': return String(token.text).split('\n').map(line => new Paragraph({ spacing: { after: 0 }, children: [new TextRun({ font: 'Consolas', text: line })] }))
