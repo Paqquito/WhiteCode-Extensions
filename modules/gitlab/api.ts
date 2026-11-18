@@ -20,10 +20,11 @@ export function projectPath(input: unknown): string {
   if (typeof input !== 'string' || !/^[\w.-]+(?:\/[\w.-]+)+$/.test(input) || input.split('/').some(p => p === '..' || p === '.')) throw Error('Projet attendu sous la forme groupe/projet.')
   return encodeURIComponent(input)
 }
-export async function gitlabRequest(instance: string, token: string, path: string): Promise<unknown> {
+export async function gitlabRequest(instance: string, token: string, path: string, method: 'GET' | 'POST' | 'PUT' = 'GET', body?: Record<string, unknown>): Promise<unknown> {
   const res = await fetch(instanceUrl(instance) + '/api/v4/' + path, {
-    headers: { 'PRIVATE-TOKEN': token }, redirect: 'error', signal: AbortSignal.timeout(15000),
+    method, body: body === undefined ? undefined : JSON.stringify(body),
+    headers: { 'PRIVATE-TOKEN': token, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) }, redirect: 'error', signal: AbortSignal.timeout(15000),
   })
   if (!res.ok) throw Error('GitLab a répondu HTTP ' + res.status + '. Vérifiez le projet et les droits de votre jeton.')
-  return res.json()
+  return res.status === 204 ? null : res.json()
 }
