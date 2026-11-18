@@ -15,7 +15,9 @@
       "description": "Bureautique : créer des documents Word, des classeurs Excel, des présentations PowerPoint et des PDF. Bibliothèques incluses, sans installation.",
       "category": "Bureautique",
       "license": "MIT",
-      "tags": ["recommended"]
+      "tags": [
+        "recommended"
+      ]
     }
   ]
 }
