@@ -4,7 +4,7 @@ import { confirmedWrite, prepareWrite, type GitLabCall, type WriteForm } from '.
 const sha = 'a'.repeat(40)
 const common = { project: 'group/app', instance: 'https://git.example', username: 'tester', iid: 2, sha, updatedAt: 'one' }
 const branch = { commit: { id: sha } }
-function fixture() {
+function fixture(jobStatus = 'manual', pipelineStatus = 'failed') {
   const mr = { iid: 2, state: 'opened', sha, updated_at: 'one', head_pipeline: { id: 7, sha }, diff_refs: { base_sha: sha, start_sha: sha, head_sha: sha } }
   const writes: Array<{ path: string; method: string; body: unknown }> = []
   const call: GitLabCall = async (path, method, body) => {
@@ -12,8 +12,8 @@ function fixture() {
     if (path.includes('/branches/')) return branch
     if (path.endsWith('/merge_requests/2')) return mr
     if (path.endsWith('/discussions/ABC')) return { id: 'ABC', notes: [{ resolvable: true, resolved: false }] }
-    if (path.endsWith('/pipelines/7')) return { id: 7, sha, status: 'failed' }
-    if (path.endsWith('/jobs/4')) return { id: 4, pipeline: { id: 7 }, commit: { id: sha }, status: 'manual' }
+    if (path.endsWith('/pipelines/7')) return { id: 7, sha, status: pipelineStatus }
+    if (path.endsWith('/jobs/4')) return { id: 4, pipeline: { id: 7 }, commit: { id: sha }, status: jobStatus }
     if (path === 'projects/group%2Fapp') return { merge_method: 'ff', squash_option: 'never' }
     throw Error('Chemin inattendu ' + path)
   }
@@ -26,10 +26,13 @@ test('chaque action est construite dans le projet et confirmée avant sa premiè
     [{ action: 'comment', body: 'Note' }, 'POST', '/notes'], [{ action: 'resolve', discussion: 'ABC' }, 'PUT', '/discussions/ABC'],
     [{ action: 'line', oldPath: 'a.ts', newPath: 'a.ts', newLine: 3, body: 'Note' }, 'POST', '/discussions'],
     [{ action: 'merge' }, 'PUT', '/merge'], [{ action: 'retryPipeline', pipeline: 7 }, 'POST', '/pipelines/7/retry'],
+    [{ action: 'cancelPipeline', pipeline: 7 }, 'POST', '/pipelines/7/cancel'],
+    [{ action: 'retryJob', pipeline: 7, job: 4 }, 'POST', '/jobs/4/retry'],
+    [{ action: 'cancelJob', pipeline: 7, job: 4 }, 'POST', '/jobs/4/cancel'],
     [{ action: 'playJob', pipeline: 7, job: 4 }, 'POST', '/jobs/4/play'],
   ]
   for (const [args, method, suffix] of cases) {
-    const { call, writes } = fixture()
+    const { call, writes } = fixture(args.action === 'retryJob' ? 'failed' : 'manual', args.action === 'cancelPipeline' ? 'running' : 'failed')
     const result = await confirmedWrite(call, { ...common, ...args }, async (_, detail) => {
       expect(writes).toHaveLength(0); expect(detail).toContain(sha); return true
     }, async () => {})
@@ -47,4 +50,14 @@ test('annulation, changement de compte ou de révision et identifiants invalides
   await expect(prepareWrite(call, { ...form, action: 'playJob', pipeline: 8, job: 4 })).rejects.toThrow()
   await expect(confirmedWrite(call, form, async () => { mr.sha = 'b'.repeat(40); return true }, async () => {})).rejects.toThrow()
   expect(writes).toEqual([])
+})
+
+test('une branche cible déplacée pendant la confirmation empêche la création', async () => {
+  const { call, writes } = fixture()
+  let target = sha
+  const branches: GitLabCall = (path, method, body) => path.endsWith('/branches/main')
+    ? Promise.resolve({ commit: { id: target } }) : call(path, method, body)
+  await expect(confirmedWrite(branches, { ...common, action: 'create', source: 'feature', target: 'main',
+    title: 'Ajout', draft: true, description: '' }, async () => { target = 'c'.repeat(40); return true }, async () => {})).rejects.toThrow()
+  expect(writes).toHaveLength(0)
 })

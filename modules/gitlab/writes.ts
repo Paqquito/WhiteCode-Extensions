@@ -32,6 +32,7 @@ interface Mutation {
   method: 'PUT' | 'POST'
   body: Record<string, unknown>
   revision: string
+  targetRevision?: string
 }
 function object(value: unknown): Record<string, any> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw Error('Réponse GitLab invalide.')
@@ -70,8 +71,9 @@ export async function prepareWrite(call: GitLabCall, input: WriteForm): Promise<
   if (input.action === 'create') {
     const source = text(input.source, 255), target = text(input.target, 255)
     if (source === target) throw Error('Les deux branches doivent être différentes.')
-    const branch = object(await call(project + '/repository/branches/' + encodeURIComponent(source)))
-    return { label: 'Créer la demande de fusion', path: collection, method: 'POST', revision: hash(branch.commit?.id),
+    const [branch, destination] = await Promise.all([source, target].map(async name =>
+      object(await call(project + '/repository/branches/' + encodeURIComponent(name)))))
+    return { label: 'Créer la demande de fusion', path: collection, method: 'POST', revision: hash(branch.commit?.id), targetRevision: hash(destination.commit?.id),
       body: { ...mrFields(input), source_branch: source, target_branch: target } }
   }
   const path = collection + '/' + id(input.iid)
@@ -127,7 +129,8 @@ export async function prepareWrite(call: GitLabCall, input: WriteForm): Promise<
 }
 export async function confirmedWrite(call: GitLabCall, input: WriteForm, confirm: (title: string, detail: string) => Promise<boolean>, checkAccount: () => Promise<void>) {
   const initial = await prepareWrite(call, input)
-  const detail = [input.username + ' · ' + input.instance, input.project + (input.iid ? ' !' + input.iid : ''), initial.revision,
+  const detail = [input.username + ' · ' + input.instance, input.project + (input.iid ? ' !' + input.iid : ''),
+    initial.revision + (initial.targetRevision ? ' → ' + initial.targetRevision : ''),
     JSON.stringify(initial.body, null, 2)].join('\n')
   if (!await confirm(initial.label, detail)) return { performed: false }
   await checkAccount()
