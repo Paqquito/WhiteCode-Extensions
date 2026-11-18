@@ -5,7 +5,7 @@
   "description": "Catalogue de plugins de WhiteCode.",
   "scripts": {
     "build:office": "bun run scripts/build-office.ts",
-    "test": "bun test plugins"
+    "test": "bun test plugins modules"
   },
   "devDependencies": {
     "@types/bun": "^1.4.0",
