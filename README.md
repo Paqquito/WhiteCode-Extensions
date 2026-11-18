@@ -12,7 +12,7 @@ Catalogue de plugins de WhiteCode.
 
 ### Générer un document
 
-Une fois le plugin Bureautique installé et activé, demandez par exemple « Transforme le README.md en document Word et joins-le ». Le modèle charge le skill avec `use_skill` puis utilise le runtime livré dans l’extension. La commande `office.cjs --convert source sortie` transforme un Markdown en DOCX, ou un JSON en XLSX ou PPTX. Les formats du JSON figurent dans les skills Excel et PowerPoint. Le runtime refuse d’écraser les fichiers existants. Le mode script reste disponible pour le PDF et les mises en page personnalisées.
+Une fois le plugin Bureautique installé et activé, demandez par exemple « Transforme le README.md en document Word et joins-le ». Le modèle charge le skill avec `use_skill` puis utilise le runtime livré dans l’extension. La commande `office.cjs --convert README.md note.docx donnees.xlsx revue.pptx fiche.pdf` génère les sorties demandées à partir des mêmes passages. Les tableaux restent numériques dans Excel et les actions ouvertes conservent leur libellé. Le champ `attach_files` de la commande déclenche leur livraison dans le tour en cours. Le runtime préserve les fichiers existants. Les entrées JSON et le mode script restent disponibles pour des mises en page personnalisées.
 
 ### Modifier la Bureautique
 

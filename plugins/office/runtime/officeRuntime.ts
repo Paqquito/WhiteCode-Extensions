@@ -10,8 +10,8 @@ import { convert } from './convert'
 
 async function main() {
   if (process.argv[2] === '--convert') {
-    if (process.argv.length !== 5) throw Error('Usage : office.cjs --convert <source> <sortie>')
-    console.log(await convert(process.argv[3]!, process.argv[4]!))
+    if (process.argv.length < 5) throw Error('Usage : office.cjs --convert <source> <sortie> [sorties...]')
+    console.log((await convert(process.argv[3]!, process.argv.slice(4))).join('\n'))
     return
   }
   const script = process.argv[2]

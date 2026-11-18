@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 import JSZip from 'jszip'
 import ExcelJS from 'exceljs'
+import { PDFDocument, PDFArray, PDFRawStream, decodePDFRawStream } from 'pdf-lib'
 
 const run = promisify(execFile)
 const runtime = join(import.meta.dir, '..', 'office.cjs')
@@ -39,4 +40,30 @@ test('le convertisseur livré écrit des fichiers Office et préserve les origin
   } finally {
     await rm(cwd, { recursive: true, force: true })
   }
+}, 30000)
+
+test('un lot garde les décisions ouvertes, les réserves et les données de la même source dans les quatre fichiers', async () => {
+  const cwd = await mkdtemp(join(tmpdir(), 'office source '))
+  const source = '# Essais\n\n## Suivi\n\n- [ ] Valider le lot A.\n- Ne pas ouvrir le lot B avant accord.\n\n| Lot | Essais |\n| --- | --- |\n| 007 | 17 |\n'
+  const outputs = ['note.docx', 'lots.xlsx', 'revue.pptx', 'fiche.pdf']
+  try {
+    await writeFile(join(cwd, 'README.md'), source)
+    const batch = (...paths: string[]) => run(process.execPath, [runtime, '--convert', 'README.md', ...paths], { cwd })
+    await batch(...outputs)
+    const xml = async (name: string, member: string) => (await JSZip.loadAsync(await readFile(join(cwd, name)))).file(member)!.async('string')
+    const book = new ExcelJS.Workbook()
+    await book.xlsx.readFile(join(cwd, 'lots.xlsx'))
+    expect(book.worksheets[0]!.getRow(2).values).toEqual([undefined, '007', 17])
+    const pdf = await PDFDocument.load(await readFile(join(cwd, 'fiche.pdf')))
+    expect(pdf.getPageCount()).toBe(1)
+    const contents = pdf.getPage(0).node.Contents() as PDFArray
+    const operators = contents.asArray().map(ref => Buffer.from(decodePDFRawStream(pdf.context.lookup(ref, PDFRawStream)).decode()).toString('latin1')).join('')
+    const pdfText = Array.from(operators.matchAll(/<([0-9a-f]+)> Tj/gi), match => Buffer.from(match[1]!, 'hex').toString('latin1')).join(' ')
+    for (const text of [await xml('note.docx', 'word/document.xml'), await xml('revue.pptx', 'ppt/slides/slide2.xml'), JSON.stringify(book.getWorksheet('Source')!.getSheetValues()), pdfText]) {
+      for (const fact of ['[ ]', 'Valider le lot A.', 'Ne pas ouvrir le lot B avant accord.']) expect(text).toContain(fact)
+    }
+    await expect(batch('nouveau.pdf', 'lots.xlsx')).rejects.toThrow('EEXIST')
+    await expect(readFile(join(cwd, 'nouveau.pdf'))).rejects.toThrow('ENOENT')
+    expect(await readFile(join(cwd, 'README.md'), 'utf8')).toBe(source)
+  } finally { await rm(cwd, { recursive: true, force: true }) }
 }, 30000)

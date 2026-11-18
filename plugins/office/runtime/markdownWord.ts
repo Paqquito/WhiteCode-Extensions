@@ -42,7 +42,7 @@ function blocks(tokens: Token[], depth = 0): Array<Paragraph | Table> {
         return item.tokens.flatMap(part => {
           if (part.type !== 'text' && part.type !== 'paragraph') return blocks([part], depth + 1)
           const children = inline(part.tokens ?? [part])
-          const prefix = first && token.ordered ? Number(token.start || 1) + index + '. ' : ''
+          const prefix = first && item.task ? (item.checked ? '[x] ' : '[ ] ') : first && token.ordered ? Number(token.start || 1) + index + '. ' : ''
           const bullet = first && !token.ordered ? { level: Math.min(depth, 8) } : undefined
           first = false
           return [new Paragraph({ bullet, children: [...(prefix ? [new TextRun(prefix)] : []), ...children] })]

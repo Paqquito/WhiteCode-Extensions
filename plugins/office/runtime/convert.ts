@@ -3,6 +3,7 @@ import { extname, resolve } from 'node:path'
 import ExcelJS from 'exceljs'
 import PptxGenJS from 'pptxgenjs'
 import { z } from 'zod'
+import { renderSource } from './sourceDocuments'
 import { markdownWord } from './markdownWord'
 
 const cell = z.union([z.string(), z.number(), z.boolean(), z.null()])
@@ -44,21 +45,28 @@ async function slides(source: string): Promise<Uint8Array> {
   return new Uint8Array(await deck.write({ outputType: 'uint8array' }) as Uint8Array)
 }
 
-export async function convert(input: string, output: string): Promise<string> {
-  const extension = extname(output).toLowerCase()
+/** Render every requested format from the same immutable source snapshot. */
+export async function convert(input: string, outputs: string[]): Promise<string[]> {
+  const source = (await readFile(input, 'utf8')).replace(/^\\uFEFF/, '')
   const sourceType = extname(input).toLowerCase()
-  const render = extension === '.docx' && ['.md', '.markdown', '.txt'].includes(sourceType) ? markdownWord
-    : extension === '.xlsx' && sourceType === '.json' ? workbook
-    : extension === '.pptx' && sourceType === '.json' ? slides : undefined
-  if (!render) throw Error('Conversions disponibles : Markdown vers DOCX, JSON vers XLSX ou PPTX.')
-  const data = await render((await readFile(input, 'utf8')).replace(/^\uFEFF/, ''))
-  const target = resolve(output)
-  const handle = await open(target, 'wx')
+  const targets = outputs.map(output => resolve(output))
+  const created: string[] = []
   try {
-    try { await handle.writeFile(data) } finally { await handle.close() }
+    for (const target of targets) {
+      const ext = extname(target).toLowerCase()
+      let data: Uint8Array
+      if (['.md', '.markdown', '.txt'].includes(sourceType) && ['.docx', '.xlsx', '.pptx', '.pdf'].includes(ext)) {
+        data = ext === '.docx' ? await markdownWord(source) : await renderSource(source, ext)
+      } else if (sourceType === '.json' && ext === '.xlsx') data = await workbook(source)
+      else if (sourceType === '.json' && ext === '.pptx') data = await slides(source)
+      else throw Error('Conversions disponibles : Markdown ou texte vers DOCX, XLSX, PPTX ou PDF, JSON vers XLSX ou PPTX.')
+      const handle = await open(target, 'wx')
+      created.push(target)
+      try { await handle.writeFile(data) } finally { await handle.close() }
+    }
+    return targets
   } catch (error) {
-    await unlink(target)
+    for (const target of created) await unlink(target).catch(failure => { if (failure.code !== 'ENOENT') throw failure })
     throw error
   }
-  return target
 }
