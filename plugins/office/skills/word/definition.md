@@ -1,11 +1,25 @@
 ---
 name: word
-description: "Créer des documents Word .docx : rapports, comptes rendus, notes et lettres avec titres, paragraphes et tableaux."
+description: 'DOCX — use_skill({"name":"whitecode-office:word"}). Créer des documents Word .docx : rapports, comptes rendus, notes et lettres avec titres, paragraphes et tableaux.'
 ---
 
 # Word
 
-## Exécution
+## Création directe
+
+Pour convertir un README ou un fichier Markdown existant, donnez-le directement au convertisseur. Il conserve les titres, listes, tableaux, liens Web et blocs de code. Pour une demande de rédaction, créez le texte Markdown demandé avec `write_file`.
+Exécutez la commande avec `run_powershell` sous Windows :
+
+```powershell
+$env:ELECTRON_RUN_AS_NODE='1'
+& $env:OFFICE_NODE $env:OFFICE_RUNTIME --convert './source.md' './note.docx'
+if ($LASTEXITCODE -ne 0) { throw 'Conversion échouée' }
+```
+
+Sous Bash, utilisez `run_shell` avec `ELECTRON_RUN_AS_NODE=1 "$OFFICE_NODE" "$OFFICE_RUNTIME" --convert './source.md' './note.docx'`.
+Le programme imprime le chemin absolu du nouveau fichier. Appelez ensuite `deliver_file` avec `mode: "attach"` et ce chemin dans `files`.
+
+## Mode script
 
 Les bibliothèques sont livrées avec ce plugin (`office.cjs`). Ne lancez ni pip ni npm pour cette tâche.
 Créez dans le dossier de travail un script `.cjs` exportant une fonction asynchrone qui reçoit les bibliothèques.
@@ -30,7 +44,7 @@ Adaptez réellement l'exemple aux données et au résultat demandés. Utilisez d
 Préservez les originaux : écrivez un nouveau fichier, sauf demande explicite de remplacer l'existant.
 Vérifiez les données, les unités, les accents et la structure du résultat. Ne prétendez jamais avoir recalculé ou inspecté visuellement un fichier sans l'avoir fait.
 Ouvrez le document généré dans l'aperçu si disponible. LibreOffice peut être nécessaire pour l'aperçu Office, mais pas pour créer le fichier.
-Envoyez le fichier final avec SendUserFile (files: [chemin absolu], caption: description courte, status: normal).
+Envoyez le fichier final avec `deliver_file` et les champs `files` (chemins absolus), `mode: "attach"`, `caption` et `status: "normal"`.
 Ne livrez pas uniquement le script ou un tableau Markdown quand l'utilisateur demande un fichier.
 
 ## Exemple de départ

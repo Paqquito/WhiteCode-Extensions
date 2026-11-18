@@ -6,7 +6,14 @@ import * as PDFLib from 'pdf-lib'
 import { createRequire } from 'node:module'
 import { resolve, extname } from 'node:path'
 
+import { convert } from './convert'
+
 async function main() {
+  if (process.argv[2] === '--convert') {
+    if (process.argv.length !== 5) throw Error('Usage : office.cjs --convert <source> <sortie>')
+    console.log(await convert(process.argv[3]!, process.argv[4]!))
+    return
+  }
   const script = process.argv[2]
   if (!script || extname(script) !== '.cjs') throw new Error('Usage : office.cjs <script.cjs>. Le script doit exporter une fonction async ({ ExcelJS, docx, PptxGenJS, PDFLib }).')
   const run = createRequire(resolve(script))(resolve(script))

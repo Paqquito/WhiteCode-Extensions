@@ -1,6 +1,6 @@
 ---
 name: pdf
-description: "Créer ou modifier des fichiers PDF, assembler des pages et produire un rapport PDF prêt à partager."
+description: 'PDF — use_skill({"name":"whitecode-office:pdf"}). Créer ou modifier des fichiers PDF, assembler des pages et produire un rapport PDF prêt à partager.'
 ---
 
 # Pdf
@@ -30,7 +30,7 @@ Adaptez réellement l'exemple aux données et au résultat demandés. Utilisez d
 Préservez les originaux : écrivez un nouveau fichier, sauf demande explicite de remplacer l'existant.
 Vérifiez les données, les unités, les accents et la structure du résultat. Ne prétendez jamais avoir recalculé ou inspecté visuellement un fichier sans l'avoir fait.
 Ouvrez le document généré dans l'aperçu si disponible. LibreOffice peut être nécessaire pour l'aperçu Office, mais pas pour créer le fichier.
-Envoyez le fichier final avec SendUserFile (files: [chemin absolu], caption: description courte, status: normal).
+Envoyez le fichier final avec `deliver_file` et les champs `files` (chemins absolus), `mode: "attach"`, `caption` et `status: "normal"`.
 Ne livrez pas uniquement le script ou un tableau Markdown quand l'utilisateur demande un fichier.
 
 ## Exemple de départ

@@ -1,6 +1,6 @@
 {
   "name": "whitecode-office",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Création de classeurs Excel, documents Word, présentations PowerPoint et PDF avec les bibliothèques livrées dans WhiteCode.",
   "skills": "./skills/",
   "author": {

@@ -16,7 +16,7 @@ import { join } from 'node:path'
 const ROOT = join(import.meta.dir, '..')
 const PLUGIN = join(ROOT, 'plugins', 'office')
 /** Les bibliothèques réellement embarquées dans `office.cjs`. */
-const BUNDLED = ['exceljs', 'docx', 'pptxgenjs', 'pdf-lib']
+const BUNDLED = ['exceljs', 'docx', 'pptxgenjs', 'pdf-lib', 'marked', 'zod']
 
 const result = await Bun.build({
   entrypoints: [join(PLUGIN, 'runtime', 'officeRuntime.ts')],

@@ -10,6 +10,10 @@ Catalogue de plugins de WhiteCode.
 |---|---|---|
 | Bureautique (`whitecode-office`) | `plugins/office/` | 4 skills (Word, Excel, PowerPoint, PDF) et `office.cjs`, le runtime qui embarque exceljs, docx, pptxgenjs et pdf-lib |
 
+### Générer un document
+
+Une fois le plugin Bureautique installé et activé, demandez par exemple « Transforme le README.md en document Word et joins-le ». Le modèle charge le skill avec `use_skill` puis utilise le runtime livré dans l’extension. La commande `office.cjs --convert source sortie` transforme un Markdown en DOCX, ou un JSON en XLSX ou PPTX. Les formats du JSON figurent dans les skills Excel et PowerPoint. Le runtime refuse d’écraser les fichiers existants. Le mode script reste disponible pour le PDF et les mises en page personnalisées.
+
 ### Modifier la Bureautique
 
 ```bash
