@@ -10,11 +10,13 @@ param(
     [string[]]$To = @(), [string[]]$Cc = @(), [string[]]$Bcc = @(),
     [string]$Start, [string]$End, [string]$Location, [string]$VideoUrl,
     [ValidateSet('Zoom','Tixeo')][string]$VideoProvider,
-    [switch]$Open, [switch]$SendInvitation, [switch]$ToSelf
+    [switch]$Open, [switch]$SendInvitation, [switch]$ToSelf,
+    [string]$KeepSlot
 )
 $ErrorActionPreference = 'Stop'
 $culture = [Globalization.CultureInfo]::InvariantCulture
 . (Join-Path $PSScriptRoot 'meeting-send.ps1')
+. (Join-Path $PSScriptRoot 'availability.ps1')
 . (Join-Path $PSScriptRoot 'mail-send.ps1')
 . (Join-Path $PSScriptRoot 'zoom-time-alert.ps1')
 
@@ -129,51 +131,17 @@ function Invoke-Outlook {
         return @{ folder=$Folder; subfolder=$Subfolder; from=$first.ToString('yyyy-MM-dd'); until=$last.ToString('yyyy-MM-dd'); results=$hits; nextOffset=$next }
     }
     if ($Action -eq 'availability') {
-        $begin = (Get-Instant $Start).LocalDateTime
-        $finish = (Get-Instant $End).LocalDateTime
+        $starts = Get-Instant $Start
+        $ends = Get-Instant $End
+        $begin = $starts.LocalDateTime
+        $finish = $ends.LocalDateTime
         if ($begin.Date -ne $finish.Date -or $finish -le $begin -or
             [TimeZoneInfo]::Local.GetUtcOffset($begin.Date) -ne [TimeZoneInfo]::Local.GetUtcOffset($finish)) {
             throw 'Choose a positive interval within one local day with a stable UTC offset.'
         }
         if ($To.Count -gt 20) { throw 'Check at most 20 people per request.' }
-        $firstSlot = [int][math]::Floor($begin.TimeOfDay.TotalMinutes / 30)
-        $after = [int][math]::Ceiling($finish.TimeOfDay.TotalMinutes / 30)
-        # The personal calendar is locally available even when Exchange free/busy is offline.
-        $ownState = 'unknown'
-        try {
-            $calendar = $session.GetDefaultFolder(9).Items
-            $calendar.Sort('[Start]')
-            $calendar.IncludeRecurrences = $true
-            $overlap = $calendar.Restrict("[Start] < '" + $finish.ToString('g') + "' AND [End] > '" + $begin.ToString('g') + "'")
-            $ownState = 'free'
-            for ($entry=$overlap.GetFirst(); $null -ne $entry; $entry=$overlap.GetNext()) {
-                if ($entry.BusyStatus -ne 0) { $ownState = 'occupied-or-tentative'; break }
-            }
-        } catch { $ownState = 'unknown' }
-        $people = @()
-        foreach ($address in $To) { $people += $session.CreateRecipient($address) }
-        $states = foreach ($person in $people) {
-            $state = 'unknown'
-            $reason = 'unresolved-recipient'
-            try {
-                if ($person.Resolve()) {
-                    $reason = 'exchange-unavailable'
-                    try { $slots = [string]$person.FreeBusy($begin.Date,30,$true) }
-                    catch { $slots = [string]$person.AddressEntry.GetFreeBusy($begin.Date,30,$true) }
-                    $reason = 'no-published-data'
-                    if ($slots.Length -ge $after) {
-                        $window = $slots.Substring($firstSlot,$after-$firstSlot)
-                        if ($window -match '^[0]+$') { $state = 'free' }
-                        elseif ($window -match '[123]') { $state = 'occupied-or-tentative' }
-                    }
-                }
-            } catch { $state = 'unknown' }
-            $row = @{ person=$person.Name; availability=$state }
-            if ($state -eq 'unknown') { $row.reason = $reason }
-            $row
-        }
-        $organizer = @{ person=$session.CurrentUser.Name; availability=$ownState }
-        return @{ start=$Start; end=$End; resolutionMinutes=30; people=@($organizer) + @($states | Where-Object { $_ }) }
+        $calendars = Read-MeetingCalendars $session $To $begin.Date $begin.Date.AddDays(1)
+        return @{ start=$Start; end=$End; resolutionMinutes=30; people=@(Get-MeetingStates $calendars $starts $ends) }
     }
     if ([string]::IsNullOrWhiteSpace($Subject)) { throw 'A subject is required.' }
     $drafts = $session.GetDefaultFolder(16)
@@ -181,6 +149,20 @@ function Invoke-Outlook {
         if ($VideoUrl) {
             $uri = [uri]$VideoUrl
             if (!$uri.IsAbsoluteUri -or $uri.Scheme -ne 'https' -or $uri.UserInfo -or $VideoUrl -match '\s') { throw 'Supply an HTTPS meeting link.' }
+        }
+        $firstDay = $starts.LocalDateTime.Date
+        $until = $firstDay.AddDays(7)
+        if ($ends.LocalDateTime -ge $until) { $until = $ends.LocalDateTime.Date.AddDays(1) }
+        $calendars = Read-MeetingCalendars $session ($To + $Cc) $firstDay $until
+        $states = @(Get-MeetingStates $calendars $starts $ends)
+        if ('occupied-or-tentative' -in $states.availability) {
+            # A reply for one time, attendee list or set of conflicts cannot
+            # silently override a newer conflict. Alternatives are checked anew.
+            $decision = [ordered]@{ subject=$Subject; start=$starts.UtcTicks; end=$ends.UtcTicks; to=$To; cc=$Cc
+                provider=$VideoProvider; send=$SendInvitation.IsPresent; organizer=$session.CurrentUser.AddressEntry.ID
+                availability=@($states | ForEach-Object { @($_.person,$_.availability) -join '|' }) }
+            $token = (Get-MeetingDigest (ConvertTo-Json -InputObject $decision -Compress)).Substring(0,16)
+            if ($KeepSlot -cne $token) { return New-MeetingConflictChoice $calendars $states $starts $ends $token }
         }
         # Outlook converts appointments moved to the mail Drafts folder into plain messages.
         $item = $app.CreateItem(1)
@@ -205,6 +187,9 @@ function Invoke-Outlook {
     $item.Save()
     $storeId = $item.Parent.StoreID
     $result = @{ id=$item.EntryID; folder=$item.Parent.Name; action=$Action; saved=$true; opened=$false; recipients=$item.Recipients.Count }
+    if ($Action -eq 'meeting') {
+        $result.unknownAvailability = @($states | Where-Object availability -eq 'unknown' | ForEach-Object { $_.person })
+    }
     if ($Open -or $VideoProvider) {
         try { $item.Display($false); $result.opened=$true }
         catch { $result.openError='Saved. Open the item in Outlook.' }

@@ -14,6 +14,16 @@ $debut = [datetimeoffset]([datetime]::Today.AddDays(1).AddHours(13))
 
 Pour Zoom, laissez le script fermer la fenêtre de préparation après enregistrement, y compris pour un brouillon. Utilisez `-Open` seulement si l’utilisateur demande explicitement de garder le brouillon affiché dans Outlook.
 
+### Conflit de disponibilité
+
+Lancez d’abord `-Action meeting` avec l’horaire demandé. Le script vérifie l’organisateur et les participants en À et Cc avant de créer la réunion. Si le reçu indique `availability-choice-required`, **appelez immédiatement l’outil `request_user_choice`** avec `{"questions": ...}` en recopiant le tableau `questions` du reçu. Attendez la sélection dans le panneau. Une demande initiale d’organiser ou d’envoyer la réunion ne vaut pas choix d’ignorer le conflit.
+
+- Pour un horaire proposé, reprenez exactement `start` et `end` de la suggestion sélectionnée. Relancez la même commande sans `-KeepSlot`.
+- Pour **Conserver le créneau demandé**, relancez la commande d’origine et ajoutez `-KeepSlot 'valeur de keepSlot du reçu'` uniquement après cette sélection.
+- Pour un horaire saisi librement, vérifiez-le par la même commande. Si la personne passe, annule ou ne répond pas, arrêtez-vous sans créer ni envoyer. Si le panneau est indisponible, posez la même question dans le chat et attendez.
+
+Conservez la durée, les participants, le fournisseur et la demande d’envoi d’origine. Si la disponibilité a changé, présentez le nouveau choix. Mentionnez les noms dans `unknownAvailability` lorsque Exchange n’a pas publié leurs horaires.
+
 Pour Tixeo, remplacez Zoom par Tixeo. Un lien HTTPS déjà fourni peut être passé avec `-VideoUrl` à la place de `-VideoProvider`. Ne demandez pas à l’utilisateur de fournir un lien quand il demande à en créer un. La commande enregistre l’invitation et ouvre son ruban. Une fois `saved=true`, ne recréez pas l’événement, même si le complément attend une action.
 
 Si le reçu indique `meeting-ended` et `saved=false`, répondez simplement « Ce créneau est déjà terminé. Aucune invitation ni aucun lien Zoom n’a été créé. À quelle heure souhaites-tu organiser la réunion ? » Attendez le nouvel horaire. Si `saved=true`, précisez que le brouillon reste dans le calendrier. `verifiedZoomLink=false` et `not-submitted` interdisent d’annoncer un lien à réutiliser ou une invitation envoyée. La seule précision nécessaire est le nouvel horaire.

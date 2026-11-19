@@ -13,6 +13,8 @@ Catalogue de plugins de WhiteCode.
 
 ### Utiliser Outlook
 
+Lorsqu’une réunion demandée chevauche un engagement de l’organisateur ou d’une personne invitée (obligatoire ou facultative), le desktop affiche un panneau de choix avant d’ouvrir Outlook ou de créer un lien de visio. Il propose jusqu’à trois créneaux de même durée, recherchés après l’horaire demandé sur sept jours calendaires, du lundi au vendredi entre 9 h et 18 h, heure locale. Vous pouvez aussi conserver l’horaire demandé, saisir un autre horaire ou passer. Le script revérifie les disponibilités avant l’enregistrement. Les agendas non publiés sont signalés, y compris sur les propositions dont la disponibilité reste à confirmer.
+
 Installez et activez **Outlook** dans le catalogue des extensions sur une révision qui contient le plugin. Le plugin utilise le profil Outlook classique de la session Windows. Le nouvel Outlook et Outlook Web ne fournissent pas cette interface. Aucun jeton ni service supplémentaire à configurer.
 
 Demandez par exemple « Résume ma boîte de réception depuis lundi et liste les décisions », « Cherche budget dans les messages envoyés la semaine dernière » ou « Prépare deux brouillons séparés pour les destinataires suivants ». La recherche porte sur les champs du message et le corps en texte brut. Elle couvre le dossier demandé du compte par défaut, avec pagination. Les extraits lus entrent dans la conversation avec le fournisseur de modèle sélectionné. Pour une boîte professionnelle, choisissez un fournisseur autorisé à traiter ses messages.
