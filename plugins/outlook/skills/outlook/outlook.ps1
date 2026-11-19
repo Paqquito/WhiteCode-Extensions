@@ -9,6 +9,7 @@ param(
     [string]$Id, [string]$Subject, [string]$Body,
     [string[]]$To = @(), [string[]]$Cc = @(),
     [string]$Start, [string]$End, [string]$Location, [string]$VideoUrl,
+    [ValidateSet('Zoom','Tixeo')][string]$VideoProvider,
     [switch]$Open
 )
 $ErrorActionPreference = 'Stop'
@@ -38,6 +39,9 @@ function Clip([string]$text, [int]$length) {
     return $text.Substring(0,[Math]::Min($text.Length,$length))
 }
 function Invoke-Outlook {
+    if ($VideoProvider -and ($Action -ne 'meeting' -or $VideoUrl)) {
+        throw 'Use VideoProvider only for a new meeting without a supplied link.'
+    }
     try { $app = New-Object -ComObject Outlook.Application }
     catch { throw 'Open classic Outlook for Windows with a configured profile.' }
     $session = $app.Session
@@ -174,9 +178,34 @@ function Invoke-Outlook {
     Add-Recipients $item $Cc 2
     $item.Save()
     $result = @{ id=$item.EntryID; folder=$item.Parent.Name; action=$Action; saved=$true; opened=$false; recipients=$item.Recipients.Count }
-    if ($Open) {
+    if ($Open -or $VideoProvider) {
         try { $item.Display($false); $result.opened=$true }
         catch { $result.openError='Saved. Open the item in Outlook.' }
+    }
+    if ($VideoProvider) {
+        $result.videoProvider = $VideoProvider
+        $result.videoStatus = 'manual-action-required'
+        if ($result.opened) {
+            try {
+                if (!('MeetingWindow' -as [type])) { Add-Type -Path (Join-Path $PSScriptRoot 'MeetingWindow.cs') }
+                $handle = [MeetingWindow]::Handle($item.GetInspector)
+                $worker = Join-Path $PSScriptRoot 'video-ribbon.ps1'
+                $ps = Join-Path $env:SystemRoot 'System32/WindowsPowerShell/v1.0/powershell.exe'
+                $process = Start-Process -FilePath $ps -ArgumentList @('-NoProfile','-NonInteractive','-File',('"' + $worker + '"'),'-Window',$handle,'-Provider',$VideoProvider) -PassThru -WindowStyle Hidden
+                try {
+                    if (!$process.WaitForExit(12000)) {
+                        $process.Kill()
+                        $result.videoStatus = 'check-open-invitation'
+                    } elseif ($process.ExitCode -eq 4) {
+                        $result.videoStatus = 'zoom-review-open'
+                    } elseif ($process.ExitCode -eq 5) {
+                        $result.videoStatus = 'addin-command-disabled'
+                    } elseif ($process.ExitCode -eq 0) {
+                        $result.videoStatus = if ($VideoProvider -eq 'Zoom') { 'check-open-invitation' } else { 'tixeo-enabled' }
+                    }
+                } finally { $process.Dispose() }
+            } catch { $result.videoStatus = 'check-open-invitation' }
+        }
     }
     return $result
 }

@@ -23,7 +23,7 @@
       "name": "whitecode-outlook",
       "displayName": "Outlook",
       "source": "./plugins/outlook",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "description": "Recherche et synthèse des mails, brouillons et invitations dans Outlook classique sous Windows.",
       "category": "Productivité",
       "license": "MIT"
