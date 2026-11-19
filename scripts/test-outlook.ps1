@@ -20,6 +20,14 @@ foreach ($operation in 'draft','meeting') {
     } finally { $item.Delete() }
 }
 # Read-only check: do not print mailbox content to the test log.
+$latest = & $script -Action latest | ConvertFrom-Json
+$inbox = $session.GetDefaultFolder(6).Items
+$inbox.Sort('[ReceivedTime]', $true)
+$firstMail = $inbox.GetFirst()
+while ($null -ne $firstMail -and $firstMail.Class -ne 43) { $firstMail = $inbox.GetNext() }
+if ($latest.found -ne ($null -ne $firstMail) -or ($latest.found -and $latest.id -ne $firstMail.EntryID)) {
+    throw 'Latest mail is not the most recently received mail.'
+}
 $page = & $script -Action search -FromDate ([datetime]::Today.AddDays(-7).ToString('yyyy-MM-dd')) -Limit 1 | ConvertFrom-Json
 if ($page.results.Count -gt 0) {
     $message = & $script -Action read -Id $page.results[0].id | ConvertFrom-Json

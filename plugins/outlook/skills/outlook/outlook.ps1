@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)][ValidateSet('status','folders','search','read','draft','availability','meeting')][string]$Action,
+    [Parameter(Mandatory)][ValidateSet('status','folders','latest','search','read','draft','availability','meeting')][string]$Action,
     [ValidateSet('inbox','sent')][string]$Folder = 'inbox',
     [string[]]$Subfolder = @(),
     [string]$FromDate, [string]$UntilDate, [string]$Query = '',
@@ -46,10 +46,21 @@ function Invoke-Outlook {
         $video = @($app.COMAddIns | Where-Object { $_.Connect -and $_.ProgId -match 'zoom|teams|tixeo|webex' } | ForEach-Object { $_.ProgId })
         return @{ outlookVersion=$app.Version; accountCount=$session.Accounts.Count; videoAddIns=$video }
     }
-    if ($Action -in 'folders','search','read') {
+    if ($Action -in 'folders','latest','search','read') {
         $folderType = if ($Folder -eq 'inbox') { 6 } else { 5 }
         $source = $session.GetDefaultFolder($folderType)
         foreach ($part in $Subfolder) { $source = $source.Folders.Item($part) }
+        if ($Action -eq 'latest') {
+            $property = if ($Folder -eq 'sent') { 'SentOn' } else { 'ReceivedTime' }
+            $items = $source.Items
+            $items.Sort("[$property]",$true)
+            for ($item=$items.GetFirst(); $null -ne $item; $item=$items.GetNext()) {
+                if ($item.Class -eq 43) {
+                    return @{ found=$true; id=$item.EntryID; subject=$item.Subject; sender=$item.SenderName; at=([datetime]$item.$property).ToString('o') }
+                }
+            }
+            return @{ found=$false }
+        }
         if ($Action -eq 'folders') {
             return @{ folder=$Folder; subfolder=$Subfolder; children=@($source.Folders | ForEach-Object { $_.Name }) }
         }
@@ -115,9 +126,13 @@ function Invoke-Outlook {
         foreach ($address in $To) { $people += $session.CreateRecipient($address) }
         $states = foreach ($person in $people) {
             $state = 'unknown'
+            $reason = 'unresolved-recipient'
             try {
                 if ($person.Resolve()) {
-                    $slots = [string]$person.FreeBusy($begin.Date,30,$true)
+                    $reason = 'exchange-unavailable'
+                    try { $slots = [string]$person.FreeBusy($begin.Date,30,$true) }
+                    catch { $slots = [string]$person.AddressEntry.GetFreeBusy($begin.Date,30,$true) }
+                    $reason = 'no-published-data'
                     if ($slots.Length -ge $after) {
                         $window = $slots.Substring($firstSlot,$after-$firstSlot)
                         if ($window -match '^[0]+$') { $state = 'free' }
@@ -125,7 +140,9 @@ function Invoke-Outlook {
                     }
                 }
             } catch { $state = 'unknown' }
-            @{ person=$person.Name; availability=$state }
+            $row = @{ person=$person.Name; availability=$state }
+            if ($state -eq 'unknown') { $row.reason = $reason }
+            $row
         }
         $organizer = @{ person=$session.CurrentUser.Name; availability=$ownState }
         return @{ start=$Start; end=$End; resolutionMinutes=30; people=@($organizer) + @($states | Where-Object { $_ }) }
