@@ -190,6 +190,10 @@ function Invoke-Outlook {
         $item = $drafts.Items.Add('IPM.Note')
     }
     $item.Subject = $Subject
+    if ($Action -eq 'draft') {
+        $original = $item.UserProperties.Add('WhiteCodeDraftSubjectHash',1,$false)
+        $original.Value = Get-MeetingDigest $Subject
+    }
     $item.Body = [string]$Body
     Add-Recipients $item $To 1
     Add-Recipients $item $Cc 2

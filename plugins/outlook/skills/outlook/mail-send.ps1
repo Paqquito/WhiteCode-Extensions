@@ -2,8 +2,8 @@
 # authorized for this send; never derive that list from the draft itself.
 function Submit-OutlookDraft($session, [string]$entryId, [string]$expectedSubject,
                             [string[]]$toList, [string[]]$ccList, [string[]]$bccList) {
-    if ($entryId -notmatch '^[0-9a-fA-F]{8,4096}$' -or [string]::IsNullOrWhiteSpace($expectedSubject)) {
-        throw 'Supply the saved draft ID and its subject.'
+    if ($entryId -notmatch '^[0-9a-fA-F]{8,4096}$') {
+        throw 'Supply the saved draft ID.'
     }
     $expected = @(
         foreach ($name in $toList) { Get-AttendeeKey ($session.CreateRecipient($name)) 1 }
@@ -22,7 +22,12 @@ function Submit-OutlookDraft($session, [string]$entryId, [string]$expectedSubjec
         if ($mail.Class -ne 43 -or $mail.Parent.EntryID -ne $drafts.EntryID -or $mail.Sent -or $mail.Submitted) {
             throw 'This item is not an unsent message in Drafts. Check Outbox and Sent Items.'
         }
-        if (!$mail.Saved -or $mail.Subject -cne $expectedSubject) {
+        $subjectMatches = $mail.Subject -ceq $expectedSubject
+        if ([string]::IsNullOrWhiteSpace($expectedSubject)) {
+            $original = $mail.UserProperties.Find('WhiteCodeDraftSubjectHash')
+            $subjectMatches = $null -ne $original -and $original.Value -eq (Get-MeetingDigest $mail.Subject)
+        }
+        if (!$mail.Saved -or !$subjectMatches) {
             throw 'Unsaved changes or subject mismatch. Review the draft before sending.'
         }
         if ($mail.UserProperties.Find('WhiteCodeSubmitAttempt')) {
@@ -35,8 +40,9 @@ function Submit-OutlookDraft($session, [string]$entryId, [string]$expectedSubjec
         $attempt = $mail.UserProperties.Add('WhiteCodeSubmitAttempt',1,$false)
         $attempt.Value = [datetime]::UtcNow.ToString('o')
         $mail.Save()
+        $sentSubject = $mail.Subject
         $mail.Send()
-        return @{ status='submitted'; draftId=$entryId; subject=$expectedSubject; verifiedRecipients=$actual.Count }
+        return @{ status='submitted'; draftId=$entryId; subject=$sentSubject; verifiedRecipients=$actual.Count }
     } finally {
         if ($held) { $mutex.ReleaseMutex() }
         $mutex.Dispose()
