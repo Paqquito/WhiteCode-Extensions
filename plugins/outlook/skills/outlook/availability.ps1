@@ -138,6 +138,11 @@ function New-MeetingConflictChoice($calendars,$states,[datetimeoffset]$start,[da
     }
 }
 
+function Get-ConfirmedScheduleText([datetimeoffset]$start,[datetimeoffset]$end) {
+    return ('Vous avez choisi le créneau du ' + $start.ToLocalTime().ToString('dd/MM/yyyy à HH:mm') +
+        ' au ' + $end.ToLocalTime().ToString('dd/MM/yyyy à HH:mm') + ' dans le panneau. La réunion est enregistrée à cet horaire dans Outlook.')
+}
+
 function Find-PreparedMeeting($session,[string]$subject,[datetimeoffset]$start,[string]$key) {
     $day = $start.LocalDateTime.Date
     $items = $session.GetDefaultFolder(9).Items.Restrict("[Subject] = '" + $subject.Replace("'","''") +

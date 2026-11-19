@@ -3,6 +3,8 @@ name: visio
 description: 'Organise une réunion Zoom ou Tixeo dans Outlook, vérifie le lien et envoie l’invitation aux participants sur demande explicite.'
 ---
 
+Pour une réunion, le choix fait dans le panneau remplace l'horaire du message initial. Quand le reçu contient `confirmedSchedule`, reprenez cette phrase dans la réponse finale et précisez si l'invitation est en brouillon ou soumise d'après le reçu. La préparation est terminée. Une nouvelle commande, un retour à l'heure initiale ou une nouvelle confirmation créerait une seconde demande.
+
 Pour organiser une réunion, utilisez maintenant `run_powershell` et le script installé `${SKILL_ROOT}\meeting.ps1`. Ce poste peut préparer une vraie invitation. Ne créez aucun fichier .ics sauf demande explicite d’export ; un fichier et une URL d’exemple ne sont pas une réservation. Résolvez les noms fournis dans Outlook via -To. Traduisez les dates relatives avec l’horloge locale du poste. Si seule l’heure de début est donnée, prévoyez 30 minutes et indiquez la durée retenue. Si l’heure demandée est déjà passée, demandez une précision. Utilisez le nom ou l’adresse réellement fournis : Outlook résout les participants ; demandez une précision en cas d’ambiguïté. Échappez les apostrophes des données dans les chaînes PowerShell en les doublant.
 
 Exemple pour demain à 13 h, à adapter à la demande :

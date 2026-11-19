@@ -158,7 +158,8 @@ function Invoke-Outlook {
             $stored = Find-PreparedMeeting $session $Subject $starts $originalKey
             if ($stored) {
                 $receipt = @{action='meeting'; status='already-saved'; saved=$true; id=$stored.EntryID; start=([datetimeoffset]$stored.Start).ToString('o')
-                    end=([datetimeoffset]$stored.End).ToString('o'); recipients=$stored.Recipients.Count}
+                    end=([datetimeoffset]$stored.End).ToString('o'); recipients=$stored.Recipients.Count
+                    confirmedSchedule=(Get-ConfirmedScheduleText $stored.Start $stored.End)}
                 if ($SendInvitation) {
                     $submitted = $stored.PropertyAccessor.GetProperty('http://schemas.microsoft.com/mapi/id/{00062002-0000-0000-C000-000000000046}/8229000B')
                     $receipt.submission = @{status=$(if ($submitted) { 'already-submitted' } else { 'not-submitted' })}
@@ -225,7 +226,10 @@ function Invoke-Outlook {
     if ($Action -eq 'meeting') {
         $result.start = $starts.ToString('yyyy-MM-ddTHH:mm:sszzz')
         $result.end = $ends.ToString('yyyy-MM-ddTHH:mm:sszzz')
-        if ($selectedLabel) { $result.userSelected = $selectedLabel }
+        if ($selectedLabel) {
+            $result.userSelected = $selectedLabel
+            $result.confirmedSchedule = Get-ConfirmedScheduleText $starts $ends
+        }
         $result.unknownAvailability = @($states | Where-Object availability -eq 'unknown' | ForEach-Object { $_.person })
     }
     if ($Open -or $VideoProvider) {
