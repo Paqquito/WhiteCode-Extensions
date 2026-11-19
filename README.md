@@ -17,6 +17,8 @@ Installez et activez **Outlook** dans le catalogue des extensions sur une révis
 
 Demandez par exemple « Résume ma boîte de réception depuis lundi et liste les décisions », « Cherche budget dans les messages envoyés la semaine dernière » ou « Prépare deux brouillons séparés pour les destinataires suivants ». La recherche porte sur les champs du message et le corps en texte brut. Elle couvre le dossier demandé du compte par défaut, avec pagination. Les extraits lus entrent dans la conversation avec le fournisseur de modèle sélectionné. Pour une boîte professionnelle, choisissez un fournisseur autorisé à traiter ses messages.
 
+Pour un mail en deux temps, demandez « Prépare un brouillon à mon adresse », puis « Envoie ce brouillon uniquement à mon adresse ». L’extension rouvre le message enregistré et vérifie son objet ainsi que les destinataires en À, Cc et Cci avant soumission à Outlook. Si les destinataires ou leurs rôles ont changé, le brouillon est conservé.
+
 Pour une réunion, précisez participants, date, heure et durée. L’invitation est enregistrée sans envoi dans le calendrier personnel, avec le statut Disponible. Les courriels restent dans Brouillons. Un lien de visio fourni peut y être inséré. Pour Zoom ou Tixeo, le plugin ouvre la fenêtre de cette invitation et actionne le bouton du fournisseur dans le ruban. Pour Zoom, la commande valide le bouton Continuez dans la fenêtre de cette invitation puis vérifie le nouveau lien de participation en relisant le rendez-vous enregistré. Si le bouton est indisponible ou le lien absent, le brouillon reste disponible pour vérification. Pour Tixeo, vérifiez que « Réunion en ligne » est activé. Si la commande est grisée, le plugin le signale et conserve l’invitation.
 
 ### Générer un document

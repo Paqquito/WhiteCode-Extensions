@@ -13,6 +13,18 @@ foreach ($operation in 'draft','meeting') {
         $folder = if ($operation -eq 'meeting') { $session.GetDefaultFolder(9) } else { $drafts }
         if (!$receipt.saved -or $item.Parent.EntryID -ne $folder.EntryID) { throw 'Unexpected Outlook folder.' }
         if (!$item.Body.Contains($parameters.Body)) { throw 'Draft body mismatch.' }
+        if ($operation -eq 'draft') {
+            $recipient = $item.Recipients.Add($session.CurrentUser.Name)
+            $recipient.Type = 3
+            if (!$recipient.Resolve()) { throw 'Could not resolve the local test account.' }
+            $item.Save()
+            $refusal = ''
+            try { $null = & $script -Action send-draft -Id $receipt.id -Subject $subject -ToSelf }
+            catch { $refusal = $_.Exception.Message }
+            if ($refusal -notlike '*mail recipients or roles differ*' -or $item.UserProperties.Find('WhiteCodeSubmitAttempt')) {
+                throw 'Unexpected handling of a changed Bcc recipient.'
+            }
+        }
         if ($operation -eq 'meeting') {
             if ($item.StartUTC.ToString('s') -ne '2027-01-06T09:00:00' -or $item.EndUTC.ToString('s') -ne '2027-01-06T09:30:00') { throw 'Incorrect meeting times.' }
             if ($item.Class -ne 26 -or $item.MeetingStatus -ne 1 -or $item.BusyStatus -ne 0 -or !$item.Body.Contains($parameters.VideoUrl)) { throw 'Incorrect invitation.' }

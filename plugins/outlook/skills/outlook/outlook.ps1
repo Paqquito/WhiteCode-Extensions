@@ -1,13 +1,13 @@
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)][ValidateSet('status','folders','latest','search','read','draft','availability','meeting','send-meeting')][string]$Action,
+    [Parameter(Mandatory)][ValidateSet('status','folders','latest','search','read','draft','send-draft','availability','meeting','send-meeting')][string]$Action,
     [ValidateSet('inbox','sent')][string]$Folder = 'inbox',
     [string[]]$Subfolder = @(),
     [string]$FromDate, [string]$UntilDate, [string]$Query = '',
     [ValidateRange(1,30)][int]$Limit = 15,
     [ValidateRange(0,2147483646)][int]$Offset = 0,
     [string]$Id, [string]$Subject, [string]$Body,
-    [string[]]$To = @(), [string[]]$Cc = @(),
+    [string[]]$To = @(), [string[]]$Cc = @(), [string[]]$Bcc = @(),
     [string]$Start, [string]$End, [string]$Location, [string]$VideoUrl,
     [ValidateSet('Zoom','Tixeo')][string]$VideoProvider,
     [switch]$Open, [switch]$SendInvitation, [switch]$ToSelf
@@ -15,6 +15,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $culture = [Globalization.CultureInfo]::InvariantCulture
 . (Join-Path $PSScriptRoot 'meeting-send.ps1')
+. (Join-Path $PSScriptRoot 'mail-send.ps1')
 
 function Get-Day([string]$value, [datetime]$fallback) {
     if (!$value) { return $fallback }
@@ -54,10 +55,12 @@ function Invoke-Outlook {
     if ($session.Accounts.Count -lt 1) { throw 'No configured Outlook account.' }
     if ($SendInvitation -and ($Action -ne 'meeting' -or $VideoProvider -ne 'Zoom')) { throw 'SendInvitation requires a new Zoom meeting.' }
     if ($ToSelf) {
-        if ($Action -notin 'meeting','send-meeting' -or $To.Count -or $Cc.Count) { throw 'ToSelf requires a meeting with no other recipients.' }
+        if ($Action -notin 'meeting','send-meeting','draft','send-draft' -or $To.Count -or $Cc.Count -or $Bcc.Count) { throw 'ToSelf requires a mail draft or meeting with no other recipients.' }
         $self = Get-AttendeeKey $session.CurrentUser 1
         $To = @($self.Substring(2))
     }
+    if ($Bcc.Count -and $Action -notin 'draft','send-draft') { throw 'Bcc applies only to mail drafts.' }
+    if ($Action -eq 'send-draft') { return Submit-OutlookDraft $session $Id $Subject $To $Cc $Bcc }
     if ($Action -eq 'send-meeting') { return Submit-ZoomMeeting $session $Id $To $Cc }
     if ($SendInvitation -and !$To.Count -and !$Cc.Count) { throw 'Specify the intended recipients before scheduling.' }
     if ($Action -eq 'status') {
@@ -190,6 +193,7 @@ function Invoke-Outlook {
     $item.Body = [string]$Body
     Add-Recipients $item $To 1
     Add-Recipients $item $Cc 2
+    if ($Bcc.Count) { Add-Recipients $item $Bcc 3 }
     $item.Save()
     $result = @{ id=$item.EntryID; folder=$item.Parent.Name; action=$Action; saved=$true; opened=$false; recipients=$item.Recipients.Count }
     if ($Open -or $VideoProvider) {
