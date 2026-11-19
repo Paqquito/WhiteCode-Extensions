@@ -128,8 +128,20 @@ function New-MeetingConflictChoice($calendars,$states,[datetimeoffset]$start,[da
     $requested = $start.ToLocalTime().ToString('dd/MM/yyyy HH:mm') + ' - ' + $end.ToLocalTime().ToString('dd/MM/yyyy HH:mm')
     $options += @{ label='Conserver le créneau demandé'; description=$requested }
     if (!$suggestions.Count) { $options += @{ label='Choisir un autre horaire'; description='Indiquer une autre date ou heure.' } }
-    return @{ status='availability-choice-required'; action='meeting'; saved=$false; opened=$false; start=$start.ToString('yyyy-MM-ddTHH:mm:sszzz'); end=$end.ToString('yyyy-MM-ddTHH:mm:sszzz')
-        people=$states; suggestions=$suggestions; keepSlot=$keepToken; questions=@(@{ header='Horaire'; require_answer=$true
-            question="Sur le créneau du $requested, Outlook indique une indisponibilité pour $($busy -join ', '). Quel horaire souhaitez-vous retenir ?"; options=$options })
+    $question = @{ header='Horaire'; require_answer=$true
+        question="Sur le créneau du $requested, Outlook indique une indisponibilité pour $($busy -join ', '). Quel horaire souhaitez-vous retenir ?"; options=$options }
+    $originalStart = $start.ToString('yyyy-MM-ddTHH:mm:sszzz')
+    $originalEnd = $end.ToString('yyyy-MM-ddTHH:mm:sszzz')
+    if ($env:TOOL_CHOICE_NONCE) {
+        # The host waits for the person and exposes just the selected receipt.
+        $receipts = @(foreach ($slot in $suggestions) {
+            ConvertTo-Json -Compress @{status='selected-time'; start=$slot.start; end=$slot.end; saved=$false}
+        })
+        $receipts += ConvertTo-Json -Compress @{status='keep-requested-time'; start=$originalStart; end=$originalEnd; keepSlot=$keepToken; saved=$false}
+        if (!$suggestions.Count) { $receipts += 'Ask the user for a new date and time. No appointment has been saved.' }
+        return [ordered]@{choiceNonce=$env:TOOL_CHOICE_NONCE; question=$question; receipts=$receipts}
+    }
+    return @{ status='availability-choice-required'; action='meeting'; saved=$false; opened=$false; start=$originalStart; end=$originalEnd
+        people=$states; suggestions=$suggestions; keepSlot=$keepToken; questions=@($question)
     }
 }
