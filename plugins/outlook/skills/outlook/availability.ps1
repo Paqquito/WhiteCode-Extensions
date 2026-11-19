@@ -138,6 +138,16 @@ function New-MeetingConflictChoice($calendars,$states,[datetimeoffset]$start,[da
     }
 }
 
+function Find-PreparedMeeting($session,[string]$subject,[datetimeoffset]$start,[string]$key) {
+    $day = $start.LocalDateTime.Date
+    $items = $session.GetDefaultFolder(9).Items.Restrict("[Subject] = '" + $subject.Replace("'","''") +
+        "' AND [Start] >= '" + $day.ToString('g') + "' AND [Start] < '" + $day.AddDays(7).ToString('g') + "'")
+    for ($item=$items.GetFirst(); $null -ne $item; $item=$items.GetNext()) {
+        $marker = $item.UserProperties.Find('WhiteCodeScheduleChoice')
+        if ($marker -and $key -cin ($marker.Value -split ' ')) { return $item }
+    }
+}
+
 function Read-MeetingChoice($question) {
     $pipe = [IO.Pipes.NamedPipeClientStream]::new('.', $env:TOOL_CHOICE_PIPE, [IO.Pipes.PipeDirection]::InOut)
     try {

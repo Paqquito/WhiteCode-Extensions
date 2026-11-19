@@ -150,6 +150,22 @@ function Invoke-Outlook {
             $uri = [uri]$VideoUrl
             if (!$uri.IsAbsoluteUri -or $uri.Scheme -ne 'https' -or $uri.UserInfo -or $VideoUrl -match '\s') { throw 'Supply an HTTPS meeting link.' }
         }
+        $selectedLabel = $null
+        if ($env:TOOL_TURN_ID -and $env:TOOL_CHOICE_PIPE) {
+            $requestScope = ConvertTo-Json -Compress -InputObject ([ordered]@{turn=$env:TOOL_TURN_ID; subject=$Subject; duration=($ends-$starts).Ticks
+                required=@($To | Sort-Object); optional=@($Cc | Sort-Object); provider=$VideoProvider; url=$VideoUrl; send=$SendInvitation.IsPresent})
+            $originalKey = Get-MeetingDigest ($requestScope + '|' + $starts.UtcTicks)
+            $stored = Find-PreparedMeeting $session $Subject $starts $originalKey
+            if ($stored) {
+                $receipt = @{action='meeting'; status='already-saved'; saved=$true; id=$stored.EntryID; start=([datetimeoffset]$stored.Start).ToString('o')
+                    end=([datetimeoffset]$stored.End).ToString('o'); recipients=$stored.Recipients.Count}
+                if ($SendInvitation) {
+                    $submitted = $stored.PropertyAccessor.GetProperty('http://schemas.microsoft.com/mapi/id/{00062002-0000-0000-C000-000000000046}/8229000B')
+                    $receipt.submission = @{status=$(if ($submitted) { 'already-submitted' } else { 'not-submitted' })}
+                }
+                return $receipt
+            }
+        }
         $confirmedSlot = if (!$env:TOOL_CHOICE_PIPE) { $KeepSlot }
         while ($true) {
             $firstDay = $starts.LocalDateTime.Date
@@ -170,9 +186,9 @@ function Invoke-Outlook {
             $reply = Read-MeetingChoice $choice.questions[0]
             if ($reply.other) { return @{status='alternative-entered'; requested=$reply.other; saved=$false; opened=$false} }
             if ($reply.none -or @($reply.labels).Count -ne 1) { return @{status='choice-skipped'; saved=$false; opened=$false} }
-            $label = $reply.labels[0]
-            if ($label -ceq $choice.keepLabel) { $confirmedSlot = $token; continue }
-            $slot = $choice.suggestions | Where-Object { $_.label -ceq $label } | Select-Object -First 1
+            $selectedLabel = $reply.labels[0]
+            if ($selectedLabel -ceq $choice.keepLabel) { $confirmedSlot = $token; continue }
+            $slot = $choice.suggestions | Where-Object { $_.label -ceq $selectedLabel } | Select-Object -First 1
             if (!$slot) { return @{status='ask-for-new-time'; saved=$false; opened=$false} }
             $starts = Get-Instant $slot.start
             $ends = Get-Instant $slot.end
@@ -184,6 +200,11 @@ function Invoke-Outlook {
         $item.BusyStatus = 0
         $item.StartUTC = $starts.UtcDateTime
         $item.EndUTC = $ends.UtcDateTime
+        if ($selectedLabel -and $originalKey) {
+            $selectedKey = Get-MeetingDigest ($requestScope + '|' + $starts.UtcTicks)
+            $marker = $item.UserProperties.Add('WhiteCodeScheduleChoice',1,$false)
+            $marker.Value = "$originalKey $selectedKey"
+        }
         $item.Location = if ($Location) { $Location } else { $VideoUrl }
         if ($VideoUrl) { $Body = "$Body" + [Environment]::NewLine + $VideoUrl }
     } else {
@@ -204,6 +225,7 @@ function Invoke-Outlook {
     if ($Action -eq 'meeting') {
         $result.start = $starts.ToString('yyyy-MM-ddTHH:mm:sszzz')
         $result.end = $ends.ToString('yyyy-MM-ddTHH:mm:sszzz')
+        if ($selectedLabel) { $result.userSelected = $selectedLabel }
         $result.unknownAvailability = @($states | Where-Object availability -eq 'unknown' | ForEach-Object { $_.person })
     }
     if ($Open -or $VideoProvider) {
