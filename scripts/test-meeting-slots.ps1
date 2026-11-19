@@ -42,6 +42,22 @@ if ($choice.suggestions[0].label -notmatch '^\d{2}:\d{2}' -or $choice.questions[
 $lateStart = [datetimeoffset]$monday.AddHours(17)
 $nextDay = @(Find-MeetingAlternatives $calendars $lateStart $lateStart.AddHours(1))[0]
 if ($nextDay.label -notmatch ([regex]::Escape($monday.AddDays(1).ToString('ddd d MMM yyyy',[cultureinfo]'fr-FR')))) { throw 'Missing date on a later-day choice.' }
+$mixedStart = [datetimeoffset]$monday.AddHours(16.5)
+$previousCapability = $env:TOOL_CHOICE_SLOTS
+try {
+    $env:TOOL_CHOICE_SLOTS = $null
+    $legacy = New-MeetingConflictChoice $calendars $states $mixedStart $mixedStart.AddMinutes(45) 'test'
+    if ($legacy.questions[0].options[0].ContainsKey('slot')) { throw 'Unexpected fields for an older engine.' }
+    $env:TOOL_CHOICE_SLOTS = '1'
+    $mixed = New-MeetingConflictChoice $calendars $states $mixedStart $mixedStart.AddMinutes(45) 'test'
+    $options = $mixed.questions[0].options
+    if (!$options[0].slot.requested_day -or $options[1].slot.requested_day -or $options[-1].ContainsKey('slot')) { throw 'Incorrect requested-day or keep option.' }
+    foreach ($suggestion in $mixed.suggestions) {
+        $option = $options | Where-Object label -CEQ $suggestion.label
+        $day = [datetimeoffset]::Parse($suggestion.start).ToLocalTime()
+        if ($option.slot.day -ne $day.ToString('dddd d MMMM yyyy',[cultureinfo]'fr-FR') -or $option.slot.hours -notlike ($day.ToString('HH:mm') + '*')) { throw 'Incorrect day or time on a selectable slot.' }
+    }
+} finally { $env:TOOL_CHOICE_SLOTS = $previousCapability }
 if (!$choice.questions[0].require_answer -or $choice.questions[0].options[$choice.suggestions.Count].description -notmatch '10:00') { throw 'Missing explicit choice to keep the requested time.' }
 $remote.days.Clear()
 $remote.unavailable = $true

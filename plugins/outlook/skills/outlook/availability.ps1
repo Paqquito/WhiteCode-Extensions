@@ -135,7 +135,14 @@ function New-MeetingConflictChoice($calendars,$states,[datetimeoffset]$start,[da
     $suggestions = @(Find-MeetingAlternatives $calendars $start $end)
     $options = @(foreach ($slot in $suggestions) {
         $description = if ($slot.unknown.Count) { 'Disponibilité à confirmer pour ' + ($slot.unknown -join ', ') } else { 'Libre pour tous les participants.' }
-        @{ label=$slot.label; description=$description }
+        $option = @{ label=$slot.label; description=$description }
+        if ($env:TOOL_CHOICE_SLOTS -eq '1') {
+            $from = [datetimeoffset]::Parse($slot.start).ToLocalTime()
+            $to = [datetimeoffset]::Parse($slot.end).ToLocalTime()
+            $option.slot = @{ day=$from.ToString('dddd d MMMM yyyy', [cultureinfo]'fr-FR')
+                hours=$from.ToString('HH:mm') + ' – ' + $to.ToString('HH:mm'); requested_day=($from.Date -eq $start.LocalDateTime.Date) }
+        }
+        $option
     })
     $begin = $start.ToLocalTime()
     $finish = $end.ToLocalTime()
