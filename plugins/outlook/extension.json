@@ -1,6 +1,6 @@
 {
   "name": "whitecode-outlook",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "Rechercher les courriels, préparer des brouillons et des réunions dans Outlook classique pour Windows.",
   "components": {
     "skills": "skills"

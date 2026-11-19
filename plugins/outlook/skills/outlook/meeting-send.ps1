@@ -123,6 +123,9 @@ function Submit-VideoMeeting($session, [string]$entryId, [string[]]$required, [s
         if ($meeting.PropertyAccessor.GetProperty($invited)) {
             return @{status='already-submitted'; id=$entryId; windowClosed=(Close-SubmittedMeeting $session.Application $calendar.StoreID $entryId)}
         }
+        if ($provider -eq 'Zoom' -and $meeting.EndUTC -le [datetime]::UtcNow) {
+            return @{status='not-submitted'; reason='meeting-ended'; id=$entryId; windowClosed=(Close-SubmittedMeeting $session.Application $calendar.StoreID $entryId)}
+        }
         $attempt = $meeting.UserProperties.Find('WhiteCodeSubmitAttempt')
         if ($attempt) { throw 'Submission already attempted. Check Outbox and Sent Items before any manual retry.' }
         $attempt = $meeting.UserProperties.Add('WhiteCodeSubmitAttempt',1,$false)

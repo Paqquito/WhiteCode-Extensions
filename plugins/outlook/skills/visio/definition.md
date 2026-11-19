@@ -14,6 +14,8 @@ $debut = [datetimeoffset]([datetime]::Today.AddDays(1).AddHours(13))
 
 Pour Tixeo, remplacez Zoom par Tixeo. Un lien HTTPS déjà fourni peut être passé avec `-VideoUrl` à la place de `-VideoProvider`. Ne demandez pas à l’utilisateur de fournir un lien quand il demande à en créer un. La commande enregistre l’invitation et ouvre son ruban. Une fois `saved=true`, ne recréez pas l’événement, même si le complément attend une action.
 
+Si le reçu indique `meeting-ended`, le créneau est déjà terminé. Demandez un nouvel horaire et attendez la réponse. `saved=false` signifie qu’aucun événement n’a été créé. `verifiedZoomLink=false` signifie que le script n’a pas confirmé de lien Zoom. `not-submitted` signifie qu’aucun envoi n’a eu lieu. Décrivez le résultat à partir de ces états, même si la demande initiale contenait « envoie directement ». Inutile de demander une seconde autorisation d’envoi ou un identifiant de réunion pour un créneau expiré.
+
 - `zoom-link-verified` signifie que le script a déjà validé **Continuez** si cette fenêtre était affichée, puis relu le lien de participation dans le rendez-vous enregistré. Annoncez que le lien a été vérifié automatiquement. Aucune confirmation du lien par l’utilisateur n’est nécessaire. Annoncez séparément si l’invitation est prête ou envoyée, selon le reçu d’envoi.
 - `zoom-review-open` signifie que le script n’a pas pu actionner **Continuez** avec certitude. Indiquez que Zoom attend encore dans ce brouillon. Conservez son identifiant.
 - `tixeo-link-verified` signifie que le complément a inséré un nouveau lien de participation sur le serveur Tixeo configuré et que le script l’a retrouvé dans l’invitation enregistrée. Annoncez la vérification automatique.

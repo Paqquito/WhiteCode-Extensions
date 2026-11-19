@@ -30,6 +30,14 @@ foreach ($sample in @(
     if ((Get-MeetingJoinUrl $sample Tixeo $origin) -cne $sample.Expected) { throw 'Unexpected Tixeo join URL selection.' }
 }
 $session = (New-Object -ComObject Outlook.Application).Session
+$expiredSubject = 'WhiteCode expired Zoom test ' + [guid]::NewGuid()
+$end = [datetimeoffset]::UtcNow.AddMinutes(-1)
+$start = $end.AddMinutes(-30)
+$receipt = & (Join-Path $PSScriptRoot '../plugins/outlook/skills/visio/meeting.ps1') -Action meeting -Subject $expiredSubject -Start $start.ToString('yyyy-MM-ddTHH:mm:ssZ') -End $end.ToString('yyyy-MM-ddTHH:mm:ssZ') -VideoProvider Zoom -SendInvitation -ToSelf | ConvertFrom-Json
+if ($receipt.videoStatus -ne 'meeting-ended' -or $receipt.saved -or $receipt.opened -or $receipt.verifiedZoomLink -or $receipt.id -or $receipt.submission.status -ne 'not-submitted') { throw 'Expired Zoom meeting should stop before opening Outlook.' }
+foreach ($folderType in 9,4,5) {
+    if ($session.GetDefaultFolder($folderType).Items.Restrict("[Subject] = '$expiredSubject'").Count) { throw 'Unexpected item for an expired meeting.' }
+}
 $drafts = $session.GetDefaultFolder(16)
 foreach ($operation in 'draft','meeting') {
     $subject = 'WhiteCode Outlook test ' + [guid]::NewGuid()

@@ -16,6 +16,7 @@ $ErrorActionPreference = 'Stop'
 $culture = [Globalization.CultureInfo]::InvariantCulture
 . (Join-Path $PSScriptRoot 'meeting-send.ps1')
 . (Join-Path $PSScriptRoot 'mail-send.ps1')
+. (Join-Path $PSScriptRoot 'zoom-time-alert.ps1')
 
 function Get-Day([string]$value, [datetime]$fallback) {
     if (!$value) { return $fallback }
@@ -43,6 +44,17 @@ function Clip([string]$text, [int]$length) {
 function Invoke-Outlook {
     if ($VideoProvider -and ($Action -ne 'meeting' -or $VideoUrl)) {
         throw 'Use VideoProvider only for a new meeting without a supplied link.'
+    }
+    if ($Action -eq 'meeting') {
+        $starts = Get-Instant $Start
+        $ends = Get-Instant $End
+        if ($ends -le $starts) { throw 'End must be later than Start.' }
+        if ($VideoProvider -eq 'Zoom' -and $ends -le [datetimeoffset]::Now) {
+            $result = @{ action='meeting'; saved=$false; opened=$false; videoProvider='Zoom'; videoStatus='meeting-ended'; verifiedZoomLink=$false
+                detail='The requested end time has passed. Ask the user for a new time.' }
+            if ($SendInvitation) { $result.submission = @{status='not-submitted'} }
+            return $result
+        }
     }
     try { $app = New-Object -ComObject Outlook.Application }
     catch { throw 'Open classic Outlook for Windows with a configured profile.' }
@@ -166,9 +178,6 @@ function Invoke-Outlook {
     if ([string]::IsNullOrWhiteSpace($Subject)) { throw 'A subject is required.' }
     $drafts = $session.GetDefaultFolder(16)
     if ($Action -eq 'meeting') {
-        $starts = Get-Instant $Start
-        $ends = Get-Instant $End
-        if ($ends -le $starts) { throw 'End must be later than Start.' }
         if ($VideoUrl) {
             $uri = [uri]$VideoUrl
             if (!$uri.IsAbsoluteUri -or $uri.Scheme -ne 'https' -or $uri.UserInfo -or $VideoUrl -match '\s') { throw 'Supply an HTTPS meeting link.' }
@@ -194,11 +203,13 @@ function Invoke-Outlook {
     Add-Recipients $item $Cc 2
     if ($Bcc.Count) { Add-Recipients $item $Bcc 3 }
     $item.Save()
+    $storeId = $item.Parent.StoreID
     $result = @{ id=$item.EntryID; folder=$item.Parent.Name; action=$Action; saved=$true; opened=$false; recipients=$item.Recipients.Count }
     if ($Open -or $VideoProvider) {
         try { $item.Display($false); $result.opened=$true }
         catch { $result.openError='Saved. Open the item in Outlook.' }
     }
+    $handle = 0
     if ($VideoProvider) {
         $origin = if ($VideoProvider -eq 'Tixeo') { Get-TixeoOrigin }
         $originalLinks = @(if ($VideoProvider -eq 'Zoom') { Get-ZoomLinks "$Body`n$Location" } else { Get-TixeoLinks "$Body`n$Location" $origin })
@@ -230,12 +241,34 @@ function Invoke-Outlook {
             } catch { $result.videoStatus = 'check-open-invitation' }
         }
     }
+    if ($VideoProvider -eq 'Zoom') {
+        $result.verifiedZoomLink = $result.videoStatus -eq 'zoom-link-verified'
+        if ($handle -and !$result.verifiedZoomLink) {
+            try {
+                if (Close-ZoomTimeAlert $handle) { $result.videoStatus = 'meeting-ended' }
+            } catch { Write-Verbose $_.Exception.Message }
+        }
+    }
     if ($SendInvitation) {
         $result.submission = @{ status='not-submitted' }
         if ($result.videoStatus -in 'zoom-link-verified','tixeo-link-verified') {
             try { $result.submission = Submit-VideoMeeting $session $result.id $To $Cc }
             catch { $result.submission = @{status='check-outlook'; detail=$_.Exception.Message} }
         }
+    }
+    if ($result.opened -and ($SendInvitation -or $result.videoStatus -eq 'meeting-ended')) {
+        if ($result.submission -and $result.submission.ContainsKey('windowClosed')) {
+            $result.windowClosed = $result.submission.windowClosed
+        } elseif ($handle) {
+            # Acknowledging a modal posts a message. Wait for this inspector to
+            # become usable without closing an unrelated prompt or losing edits.
+            $until = [datetime]::UtcNow.AddSeconds(2)
+            while (![MeetingWindow]::IsWindowEnabled([intptr]$handle) -and [datetime]::UtcNow -lt $until) {
+                Start-Sleep -Milliseconds 100
+            }
+            $result.windowClosed = [MeetingWindow]::IsWindowEnabled([intptr]$handle) -and (Close-SubmittedMeeting $app $storeId $result.id)
+        }
+        if ($result.windowClosed) { $result.opened = $false }
     }
     return $result
 }
