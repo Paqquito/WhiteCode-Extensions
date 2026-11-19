@@ -39,7 +39,7 @@ Pour « uniquement à moi », remplacez les paramètres d’adresses par `-ToSel
 
 ### Réunions
 
-À la création de toute réunion, le script vérifie les calendriers avant d’enregistrer. Sur `availability-choice-required`, appelez `request_user_choice` avec le tableau `questions` du reçu, puis attendez. Pour une suggestion choisie, reprenez ses dates `start` et `end`. Pour « Conserver le créneau demandé », reprenez les dates d’origine avec `-KeepSlot` et la valeur `keepSlot` du reçu. Gardez les participants et la demande d’envoi initiaux. Si le choix est passé ou annulé, arrêtez-vous. Signalez les participants dans `unknownAvailability`.
+À la création de toute réunion, le script vérifie les calendriers avant d’enregistrer. Sur `availability-choice-required`, appelez `request_user_choice` avec les questions du reçu, y compris `require_answer: true`, puis attendez. Pour une suggestion choisie, reprenez ses dates `start` et `end`. Pour « Conserver le créneau demandé », reprenez les dates d’origine avec `-KeepSlot` et la valeur `keepSlot` du reçu. Gardez les participants et la demande d’envoi initiaux. Si le choix est passé ou annulé, arrêtez-vous. Signalez les participants dans `unknownAvailability`.
 
 Pour vérifier un créneau proposé, utilisez `-Action availability -Start '2026-03-03T10:00:00+01:00' -End '2026-03-03T10:30:00+01:00' -To @('personne@example.org')`. Outlook consulte la disponibilité du compte et des personnes indiquées avec une résolution de 30 minutes. Une réponse `unknown` signifie que le créneau reste à confirmer. Plusieurs créneaux peuvent être comparés sans créer d’événement.
 

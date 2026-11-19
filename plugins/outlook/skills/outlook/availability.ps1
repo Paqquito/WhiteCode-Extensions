@@ -129,7 +129,7 @@ function New-MeetingConflictChoice($calendars,$states,[datetimeoffset]$start,[da
     $options += @{ label='Conserver le créneau demandé'; description=$requested }
     if (!$suggestions.Count) { $options += @{ label='Choisir un autre horaire'; description='Indiquer une autre date ou heure.' } }
     return @{ status='availability-choice-required'; action='meeting'; saved=$false; opened=$false; start=$start.ToString('yyyy-MM-ddTHH:mm:sszzz'); end=$end.ToString('yyyy-MM-ddTHH:mm:sszzz')
-        people=$states; suggestions=$suggestions; keepSlot=$keepToken; questions=@(@{ header='Horaire'
+        people=$states; suggestions=$suggestions; keepSlot=$keepToken; questions=@(@{ header='Horaire'; require_answer=$true
             question="Sur le créneau du $requested, Outlook indique une indisponibilité pour $($busy -join ', '). Quel horaire souhaitez-vous retenir ?"; options=$options })
     }
 }

@@ -18,6 +18,7 @@ Pour Zoom, laissez le script fermer la fenêtre de préparation après enregistr
 
 Lancez d’abord `-Action meeting` avec l’horaire demandé. Le script vérifie l’organisateur et les participants en À et Cc avant de créer la réunion. Si le reçu indique `availability-choice-required`, **appelez immédiatement l’outil `request_user_choice`** avec `{"questions": ...}` en recopiant le tableau `questions` du reçu. Attendez la sélection dans le panneau. Une demande initiale d’organiser ou d’envoyer la réunion ne vaut pas choix d’ignorer le conflit.
 
+- Gardez `require_answer: true` dans la question. « Passer » termine la préparation.
 - Pour un horaire proposé, reprenez exactement `start` et `end` de la suggestion sélectionnée. Relancez la même commande sans `-KeepSlot`.
 - Pour **Conserver le créneau demandé**, relancez la commande d’origine et ajoutez `-KeepSlot 'valeur de keepSlot du reçu'` uniquement après cette sélection.
 - Pour un horaire saisi librement, vérifiez-le par la même commande. Si la personne passe, annule ou ne répond pas, arrêtez-vous sans créer ni envoyer. Si le panneau est indisponible, posez la même question dans le chat et attendez.
