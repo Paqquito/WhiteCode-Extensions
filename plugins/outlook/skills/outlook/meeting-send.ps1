@@ -44,7 +44,12 @@ function Submit-ZoomMeeting($session, [string]$entryId, [string[]]$required, [st
         )
         $actual = @(
             foreach ($recipient in $meeting.Recipients) {
-                if ($recipient.Type -eq 0 -and $recipient.AddressEntry.ID -eq $session.CurrentUser.AddressEntry.ID) { continue }
+                # After Zoom saves the appointment Outlook can expose the organizer as
+                # olRequired too. PidTagRecipientFlags identifies the organizer row.
+                if ($recipient.AddressEntry.ID -eq $session.CurrentUser.AddressEntry.ID) {
+                    $flags = $recipient.PropertyAccessor.GetProperty('http://schemas.microsoft.com/mapi/proptag/0x5FFD0003')
+                    if ($recipient.Type -eq 0 -or ($flags -band 2)) { continue }
+                }
                 Get-AttendeeKey $recipient $recipient.Type
             }
         )
