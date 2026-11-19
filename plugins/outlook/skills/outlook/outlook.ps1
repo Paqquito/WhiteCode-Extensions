@@ -212,7 +212,7 @@ function Invoke-Outlook {
     $handle = 0
     if ($VideoProvider) {
         $origin = if ($VideoProvider -eq 'Tixeo') { Get-TixeoOrigin }
-        $originalLinks = @(if ($VideoProvider -eq 'Zoom') { Get-ZoomLinks "$Body`n$Location" } else { Get-TixeoLinks "$Body`n$Location" $origin })
+        $originalLinks = @(if ($VideoProvider -eq 'Zoom') { Get-ZoomLinks $Body $Location } else { Get-TixeoLinks "$Body`n$Location" $origin })
         $result.videoProvider = $VideoProvider
         $result.videoStatus = 'manual-action-required'
         if ($result.opened) {
@@ -248,6 +248,12 @@ function Invoke-Outlook {
                 if (Close-ZoomTimeAlert $handle) { $result.videoStatus = 'meeting-ended' }
             } catch { Write-Verbose $_.Exception.Message }
         }
+        if ($result.opened -and (!$Open -or $SendInvitation -or $result.videoStatus -eq 'meeting-ended')) {
+            # Flush the add-in's edits. Submission below reopens the calendar
+            # item by ID and checks the persisted link and participants.
+            $result.windowClosed = Close-MeetingWindow $app $storeId $result.id -SaveDraftEdits
+            $result.opened = !$result.windowClosed
+        }
     }
     if ($SendInvitation) {
         $result.submission = @{ status='not-submitted' }
@@ -256,17 +262,11 @@ function Invoke-Outlook {
             catch { $result.submission = @{status='check-outlook'; detail=$_.Exception.Message} }
         }
     }
-    if ($result.opened -and ($SendInvitation -or $result.videoStatus -eq 'meeting-ended')) {
+    if ($SendInvitation -and $result.opened) {
         if ($result.submission -and $result.submission.ContainsKey('windowClosed')) {
             $result.windowClosed = $result.submission.windowClosed
-        } elseif ($handle) {
-            # Acknowledging a modal posts a message. Wait for this inspector to
-            # become usable without closing an unrelated prompt or losing edits.
-            $until = [datetime]::UtcNow.AddSeconds(2)
-            while (![MeetingWindow]::IsWindowEnabled([intptr]$handle) -and [datetime]::UtcNow -lt $until) {
-                Start-Sleep -Milliseconds 100
-            }
-            $result.windowClosed = [MeetingWindow]::IsWindowEnabled([intptr]$handle) -and (Close-SubmittedMeeting $app $storeId $result.id)
+        } elseif (!$result.ContainsKey('windowClosed')) {
+            $result.windowClosed = Close-MeetingWindow $app $storeId $result.id
         }
         if ($result.windowClosed) { $result.opened = $false }
     }

@@ -8,6 +8,10 @@ foreach ($sample in @(
     @{ Body='Agenda'; Location=$joinUrl; Expected=$joinUrl },
     @{ Body="Join ($joinUrl)"; Location=$bare; Expected=$joinUrl },
     @{ Body=$joinUrl; Location=$joinUrl; Expected=$joinUrl },
+    @{ Body=$joinUrl; Location="$joinUrl; $joinUrl"; Expected=$joinUrl },
+    @{ Body=''; Location="$bare;$joinUrl"; Expected=$joinUrl },
+    @{ Body=$joinUrl; Location="$joinUrl; $($joinUrl.Replace('AbCd','abcd'))"; Expected=$null },
+    @{ Body=$joinUrl; Location="$joinUrl;$($bare.Replace('12345678901','22345678901'))"; Expected=$null },
     @{ Body=$joinUrl; Location=$joinUrl.Replace('AbCd','abcd'); Expected=$null },
     @{ Body=$joinUrl; Location=$joinUrl.Replace('12345678901','22345678901'); Expected=$null },
     @{ Body="https://example.org/?next=$joinUrl"; Location=''; Expected=$null },
@@ -74,9 +78,12 @@ foreach ($operation in 'draft','meeting') {
             $item.Display($false)
             $store = $folder.StoreID
             if (!(Find-MeetingInspector $session.Application $store $receipt.id)) { throw 'Test inspector not found.' }
-            if (!(Close-SubmittedMeeting $session.Application $store $receipt.id)) { throw 'Test inspector stayed open.' }
+            $item.Location = "$joinUrl; $joinUrl"
+            if ($item.Saved) { throw 'Expected pending inspector edits.' }
+            if (!(Close-MeetingWindow $session.Application $store $receipt.id -SaveDraftEdits)) { throw 'Test inspector stayed open.' }
             # Tixeo link in the persisted item, then changed underneath its receipt.
             $item = $session.GetItemFromID($receipt.id,$store)
+            if ($item.Location -cne "$joinUrl; $joinUrl" -or (Get-ZoomJoinUrl $item) -cne $joinUrl) { throw 'Zoom location was not preserved after closure.' }
             $item.Body = $tixeo
             $item.Save()
             if (!(Save-MeetingLinkProof $session $item Tixeo $origin @())) { throw 'Tixeo receipt missing.' }

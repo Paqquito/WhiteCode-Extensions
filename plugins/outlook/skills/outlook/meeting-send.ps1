@@ -4,7 +4,9 @@ function Get-MeetingDigest([string]$value) {
     try { return [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($value))).Replace('-','') }
     finally { $sha.Dispose() }
 }
-function Get-ZoomLinks([string]$text) {
+function Get-ZoomLinks([string]$text,[string]$location) {
+    # Outlook separates entries in the Location field with semicolons.
+    $text = $text + "`n" + ($location -replace ';(?=\s|https?://|$)',' ')
     $pattern = '(?i)(?:^|[\s<("\x27\[])(https://(?:[a-z0-9-]+\.)*(?:zoom\.us|zoom\.com|zoomgov\.com|zoom\.com\.cn)' +
         '/j/[0-9]{9,11}(?:[?#][^\s<>")\]\x27]*)?)(?=$|[\s<>"\x27)\]]|[.,](?=\s|$))'
     foreach ($match in [regex]::Matches($text,$pattern)) { $match.Groups[1].Value.TrimEnd('.',',') }
@@ -13,7 +15,7 @@ function Get-ZoomLinks([string]$text) {
 # Zoom can write the join URL to the body, the location, or both. A bare
 # copy and a copy with a passcode may identify the same meeting.
 function Get-ZoomJoinUrl($appointment) {
-    $urls = @(Get-ZoomLinks "$($appointment.Body)`n$($appointment.Location)" | Sort-Object -Unique -CaseSensitive)
+    $urls = @(Get-ZoomLinks $appointment.Body $appointment.Location | Sort-Object -Unique -CaseSensitive)
     if ($urls.Count -eq 1) { return $urls[0] }
     $targets = @($urls | ForEach-Object { ([uri]$_).GetLeftPart([UriPartial]::Path) } | Sort-Object -Unique)
     $qualified = @($urls | Where-Object { $_ -match '[?#]' })
@@ -66,11 +68,23 @@ function Find-MeetingInspector($app,[string]$storeId,[string]$entryId) {
     }
 }
 
-function Close-SubmittedMeeting($app,[string]$storeId,[string]$entryId) {
+function Close-MeetingWindow($app,[string]$storeId,[string]$entryId,[switch]$SaveDraftEdits) {
     try {
         $inspector = Find-MeetingInspector $app $storeId $entryId
         if (!$inspector) { return $true }
-        if (!$inspector.CurrentItem.Saved) { return $false }
+        if (!('MeetingWindow' -as [type])) { Add-Type -Path (Join-Path $PSScriptRoot 'MeetingWindow.cs') }
+        $handle = [intptr][MeetingWindow]::Handle($inspector)
+        # Zoom can briefly retain its modal window after the alert was dismissed.
+        $deadline = [datetime]::UtcNow.AddSeconds(2)
+        while (![MeetingWindow]::IsWindowEnabled($handle) -and [datetime]::UtcNow -lt $deadline) {
+            Start-Sleep -Milliseconds 100
+        }
+        if (![MeetingWindow]::IsWindowEnabled($handle)) { return !(Find-MeetingInspector $app $storeId $entryId) }
+        $item = $inspector.CurrentItem
+        if (!$item.Saved) {
+            if (!$SaveDraftEdits -or $item.PropertyAccessor.GetProperty('http://schemas.microsoft.com/mapi/id/{00062002-0000-0000-C000-000000000046}/8229000B')) { return $false }
+            $item.Save()
+        }
         $inspector.Close(0)
         return !(Find-MeetingInspector $app $storeId $entryId)
     } catch { return $false }
@@ -121,10 +135,10 @@ function Submit-VideoMeeting($session, [string]$entryId, [string[]]$required, [s
         # FInvited also detects manual sends through the Outlook inspector.
         $invited = 'http://schemas.microsoft.com/mapi/id/{00062002-0000-0000-C000-000000000046}/8229000B'
         if ($meeting.PropertyAccessor.GetProperty($invited)) {
-            return @{status='already-submitted'; id=$entryId; windowClosed=(Close-SubmittedMeeting $session.Application $calendar.StoreID $entryId)}
+            return @{status='already-submitted'; id=$entryId; windowClosed=(Close-MeetingWindow $session.Application $calendar.StoreID $entryId)}
         }
         if ($provider -eq 'Zoom' -and $meeting.EndUTC -le [datetime]::UtcNow) {
-            return @{status='not-submitted'; reason='meeting-ended'; id=$entryId; windowClosed=(Close-SubmittedMeeting $session.Application $calendar.StoreID $entryId)}
+            return @{status='not-submitted'; reason='meeting-ended'; id=$entryId; windowClosed=(Close-MeetingWindow $session.Application $calendar.StoreID $entryId)}
         }
         $attempt = $meeting.UserProperties.Find('WhiteCodeSubmitAttempt')
         if ($attempt) { throw 'Submission already attempted. Check Outbox and Sent Items before any manual retry.' }
@@ -137,7 +151,7 @@ function Submit-VideoMeeting($session, [string]$entryId, [string[]]$required, [s
             $updated = $session.GetItemFromID($entryId,$calendar.StoreID)
             if ($updated.PropertyAccessor.GetProperty($invited)) {
                 $receipt = @{status='submitted'; id=$entryId; verifiedParticipants=$actual.Count; videoProvider=$provider
-                    windowClosed=(Close-SubmittedMeeting $session.Application $calendar.StoreID $entryId)}
+                    windowClosed=(Close-MeetingWindow $session.Application $calendar.StoreID $entryId)}
                 $receipt["verified${provider}Link"] = $true
                 return $receipt
             }
