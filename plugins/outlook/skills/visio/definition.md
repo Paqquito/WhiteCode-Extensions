@@ -14,11 +14,11 @@ $debut = [datetimeoffset]([datetime]::Today.AddDays(1).AddHours(13))
 
 Pour Tixeo, remplacez Zoom par Tixeo. Un lien HTTPS déjà fourni peut être passé avec `-VideoUrl` à la place de `-VideoProvider`. Ne demandez pas à l’utilisateur de fournir un lien quand il demande à en créer un. La commande enregistre l’invitation et ouvre son ruban. Une fois `saved=true`, ne recréez pas l’événement, même si le complément attend une action.
 
-- `zoom-link-verified` : le complément a ajouté un lien Zoom vérifié dans le rendez-vous enregistré. Par défaut, laissez l’invitation à relire.
-- `zoom-review-open` : la configuration Zoom est ouverte. Demandez de valider **Continuez** dans cette fenêtre, puis de vérifier le lien dans l’invitation avant l’envoi.
+- `zoom-link-verified` signifie que le script a déjà validé **Continuez** si cette fenêtre était affichée, puis relu le lien de participation dans le rendez-vous enregistré. Annoncez que le lien a été vérifié automatiquement. Aucune confirmation du lien par l’utilisateur n’est nécessaire. Annoncez séparément si l’invitation est prête ou envoyée, selon le reçu d’envoi.
+- `zoom-review-open` signifie que le script n’a pas pu actionner **Continuez** avec certitude. Indiquez que Zoom attend encore dans ce brouillon. Conservez son identifiant.
 - `tixeo-enabled` : le bouton **Réunion en ligne** est activé sur cette invitation. L’organisateur vérifie les réglages puis envoie dans Outlook.
 - `addin-command-disabled` : Outlook a grisé la commande. Pour Tixeo, demander de vérifier la connexion au client avec le même compte et le droit organisateur. L’invitation préparée est conservée.
-- Tout autre état : indiquer que le lien reste à vérifier ou à ajouter dans l’invitation existante.
+- Si aucun lien unique n’a été confirmé, expliquez le blocage sur l’invitation existante. Arrêtez la création dès le premier reçu `saved=true`, même si le complément échoue.
 
 ### Envoyer une invitation Zoom
 

@@ -1,6 +1,20 @@
 # Opt-in integration check for classic Outlook. Creates only uniquely named, recipient-free test items.
 $ErrorActionPreference = 'Stop'
 $script = Join-Path $PSScriptRoot '../plugins/outlook/skills/outlook/outlook.ps1'
+. (Join-Path $PSScriptRoot '../plugins/outlook/skills/outlook/meeting-send.ps1')
+$joinUrl = 'https://example.zoom.us/j/12345678901?pwd=AbCd'
+$bare = $joinUrl.Split('?')[0]
+foreach ($sample in @(
+    @{ Body='Agenda'; Location=$joinUrl; Expected=$joinUrl },
+    @{ Body="Join ($joinUrl)"; Location=$bare; Expected=$joinUrl },
+    @{ Body=$joinUrl; Location=$joinUrl; Expected=$joinUrl },
+    @{ Body=$joinUrl; Location=$joinUrl.Replace('AbCd','abcd'); Expected=$null },
+    @{ Body=$joinUrl; Location=$joinUrl.Replace('12345678901','22345678901'); Expected=$null },
+    @{ Body="https://example.org/?next=$joinUrl"; Location=''; Expected=$null },
+    @{ Body='https://zoom.us.example.org/j/12345678901'; Location=''; Expected=$null }
+)) {
+    if ((Get-ZoomJoinUrl $sample) -cne $sample.Expected) { throw 'Unexpected Zoom join URL selection.' }
+}
 $session = (New-Object -ComObject Outlook.Application).Session
 $drafts = $session.GetDefaultFolder(16)
 foreach ($operation in 'draft','meeting') {

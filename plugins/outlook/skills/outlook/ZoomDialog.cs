@@ -14,21 +14,32 @@ public static class ZoomDialog {
     [DllImport("user32.dll")] static extern bool PrintWindow(IntPtr hwnd, IntPtr dc, uint flags);
     [DllImport("user32.dll")] static extern bool PostMessage(IntPtr hwnd, uint message, IntPtr w, IntPtr l);
 
-    public static MemoryStream Capture(IntPtr hwnd) {
+    public const int FooterScale = 2;
+
+    public static MemoryStream CaptureFooter(IntPtr hwnd, out int width, out int height, out int top) {
         var previous = SetThreadDpiAwarenessContext(GetWindowDpiAwarenessContext(hwnd));
         try {
             Rect r;
             if (!GetClientRect(hwnd, out r) || r.Right < 100 || r.Bottom < 100 || r.Right > 4096 || r.Bottom > 4096)
                 throw new InvalidOperationException("Unexpected Zoom dialog size.");
-            using (var bitmap = new Bitmap(r.Right, r.Bottom))
+            width = r.Right;
+            height = r.Bottom;
+            top = height * 3 / 4;
+            using (var bitmap = new Bitmap(width, height))
             using (var graphics = Graphics.FromImage(bitmap)) {
                 var dc = graphics.GetHdc();
                 try { if (!PrintWindow(hwnd, dc, 3)) throw new InvalidOperationException("Zoom dialog capture failed."); }
                 finally { graphics.ReleaseHdc(dc); }
-                var stream = new MemoryStream();
-                bitmap.Save(stream, ImageFormat.Png);
-                stream.Position = 0;
-                return stream;
+                var footer = new Rectangle(0, top, width, height - top);
+                using (var enlarged = new Bitmap(width * FooterScale, footer.Height * FooterScale))
+                using (var drawing = Graphics.FromImage(enlarged)) {
+                    drawing.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                    drawing.DrawImage(bitmap, new Rectangle(0, 0, enlarged.Width, enlarged.Height), footer, GraphicsUnit.Pixel);
+                    var stream = new MemoryStream();
+                    enlarged.Save(stream, ImageFormat.Png);
+                    stream.Position = 0;
+                    return stream;
+                }
             }
         } finally { SetThreadDpiAwarenessContext(previous); }
     }

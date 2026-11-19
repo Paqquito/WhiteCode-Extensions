@@ -4,6 +4,42 @@ function Get-MeetingDigest([string]$value) {
     try { return [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($value))).Replace('-','') }
     finally { $sha.Dispose() }
 }
+function Get-ZoomLinks([string]$text) {
+    $pattern = '(?i)(?:^|[\s<("\x27\[])(https://(?:[a-z0-9-]+\.)*(?:zoom\.us|zoom\.com|zoomgov\.com|zoom\.com\.cn)' +
+        '/j/[0-9]{9,11}(?:[?#][^\s<>")\]\x27]*)?)(?=$|[\s<>"\x27)\]]|[.,](?=\s|$))'
+    foreach ($match in [regex]::Matches($text,$pattern)) { $match.Groups[1].Value.TrimEnd('.',',') }
+}
+
+# Zoom can write the join URL to the body, the location, or both. A bare
+# copy and a copy with a passcode may identify the same meeting.
+function Get-ZoomJoinUrl($appointment) {
+    $urls = @(Get-ZoomLinks "$($appointment.Body)`n$($appointment.Location)" | Sort-Object -Unique -CaseSensitive)
+    if ($urls.Count -eq 1) { return $urls[0] }
+    $targets = @($urls | ForEach-Object { ([uri]$_).GetLeftPart([UriPartial]::Path) } | Sort-Object -Unique)
+    $qualified = @($urls | Where-Object { $_ -match '[?#]' })
+    if ($targets.Count -eq 1 -and $qualified.Count -eq 1) { return $qualified[0] }
+}
+
+function Save-ZoomLinkProof($session,$item,[string[]]$originalLinks) {
+    $until = [datetime]::UtcNow.AddSeconds(20)
+    do {
+        $url = Get-ZoomJoinUrl $item
+        if ($url -and $url -cnotin $originalLinks) {
+            $item.Save()
+            $stored = $session.GetItemFromID($item.EntryID,$item.Parent.StoreID)
+            if ($stored.Class -eq 26 -and $stored.MeetingStatus -eq 1 -and (Get-ZoomJoinUrl $stored) -ceq $url) {
+                $proof = $stored.UserProperties.Find('WhiteCodeZoomProof')
+                if (!$proof) { $proof = $stored.UserProperties.Add('WhiteCodeZoomProof',1,$false) }
+                $proof.Value = Get-MeetingDigest ($stored.EntryID + '|' + $url)
+                $stored.Save()
+                return $true
+            }
+        }
+        Start-Sleep -Milliseconds 250
+    } while ([datetime]::UtcNow -lt $until)
+    return $false
+}
+
 function Get-AttendeeKey($recipient, [int]$role) {
     if (!$recipient.Resolve()) { throw 'Unresolved or ambiguous attendee.' }
     $entry = $recipient.AddressEntry
@@ -33,10 +69,8 @@ function Submit-ZoomMeeting($session, [string]$entryId, [string[]]$required, [st
         if (!$meeting.Saved) { throw 'Save your Outlook edits before submission.' }
         $proof = $meeting.UserProperties.Find('WhiteCodeZoomProof')
         if (!$proof) { throw 'No verified Zoom link receipt for this appointment.' }
-        $urls = @(Get-ZoomLinks $meeting.Body | Sort-Object -Unique)
-        $valid = @($urls | Where-Object { (Get-MeetingDigest ($meeting.EntryID + '|' + $_)) -eq $proof.Value })
-        $targets = @($urls | ForEach-Object { ([uri]$_).GetLeftPart([UriPartial]::Path) } | Sort-Object -Unique)
-        if ($valid.Count -ne 1 -or $targets.Count -ne 1) { throw 'The verified Zoom link is missing, changed or ambiguous.' }
+        $url = Get-ZoomJoinUrl $meeting
+        if (!$url -or (Get-MeetingDigest ($meeting.EntryID + '|' + $url)) -ne $proof.Value) { throw 'The verified Zoom link is missing, changed or ambiguous.' }
 
         $expected = @(
             foreach ($name in $required) { Get-AttendeeKey ($session.CreateRecipient($name)) 1 }

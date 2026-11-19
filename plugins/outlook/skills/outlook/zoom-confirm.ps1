@@ -12,7 +12,7 @@ function Confirm-ZoomDialog($dialog) {
     # Older Zoom clients draw the controls themselves. Read only the owned dialog,
     # in memory, and require a unique Continue/Cancel button pair on the same row.
     Add-Type -AssemblyName System.Runtime.WindowsRuntime,System.Drawing
-    Add-Type -Path (Join-Path $PSScriptRoot 'ZoomDialog.cs') -ReferencedAssemblies System.Drawing
+    if (!('ZoomDialog' -as [type])) { Add-Type -Path (Join-Path $PSScriptRoot 'ZoomDialog.cs') -ReferencedAssemblies System.Drawing }
     $null = [Windows.Graphics.Imaging.BitmapDecoder,Windows.Graphics.Imaging,ContentType=WindowsRuntime]
     $null = [Windows.Graphics.Imaging.SoftwareBitmap,Windows.Graphics.Imaging,ContentType=WindowsRuntime]
     $null = [Windows.Media.Ocr.OcrEngine,Windows.Foundation,ContentType=WindowsRuntime]
@@ -28,21 +28,23 @@ function Confirm-ZoomDialog($dialog) {
     }
     $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages()
     if (!$engine) { return $false }
-    $stream = [ZoomDialog]::Capture($handle)
+    $width = $height = $top = 0
+    $stream = [ZoomDialog]::CaptureFooter($handle,[ref]$width,[ref]$height,[ref]$top)
     try {
         $source = [System.IO.WindowsRuntimeStreamExtensions]::AsRandomAccessStream($stream)
         $decoder = Read-Operation ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($source)) ([Windows.Graphics.Imaging.BitmapDecoder])
         $bitmap = Read-Operation ($decoder.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])
         try {
             $page = Read-Operation ($engine.RecognizeAsync($bitmap)) ([Windows.Media.Ocr.OcrResult])
-            $words = @($page.Lines | ForEach-Object { $_.Words } | Where-Object { $_.BoundingRect.Y -gt $bitmap.PixelHeight * 0.75 })
+            $words = @($page.Lines | ForEach-Object { $_.Words })
             $ok = @($words | Where-Object { $_.Text -in 'Continuez','Continuer','Continue' })
             $cancel = @($words | Where-Object { $_.Text -in 'Annuler','Cancel' })
             if ($ok.Count -ne 1 -or $cancel.Count -ne 1) { return $false }
             $a=$ok[0].BoundingRect; $b=$cancel[0].BoundingRect
             if ($a.X + $a.Width -ge $b.X -or [math]::Abs($a.Y-$b.Y) -gt $a.Height) { return $false }
-            return [ZoomDialog]::ClickClient($handle,$bitmap.PixelWidth,$bitmap.PixelHeight,
-                [int]($a.X+$a.Width/2),[int]($a.Y+$a.Height/2))
+            $x = [int](($a.X + $a.Width/2) / [ZoomDialog]::FooterScale)
+            $y = $top + [int](($a.Y + $a.Height/2) / [ZoomDialog]::FooterScale)
+            return [ZoomDialog]::ClickClient($handle,$width,$height,$x,$y)
         } finally { $bitmap.Dispose() }
     } finally { $stream.Dispose() }
 }

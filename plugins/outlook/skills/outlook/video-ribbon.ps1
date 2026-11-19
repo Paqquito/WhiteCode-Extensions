@@ -30,17 +30,23 @@ do {
         if ($Provider -eq 'Zoom') {
             $buttons[0].GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
             $dialogs = New-Object Windows.Automation.PropertyCondition($element::ControlTypeProperty,[Windows.Automation.ControlType]::Window)
-            for ($attempt=0; $attempt -lt 12; $attempt++) {
+            $dialogDeadline = [datetime]::UtcNow.AddSeconds(5)
+            do {
                 foreach ($dialog in $root.FindAll($tree,$dialogs)) {
                     if ($dialog.Current.Name -match '^Zoom\s*[-\u2013]\s*(Planifier une r.union|Schedule a Meeting)$') {
                         . (Join-Path $PSScriptRoot 'zoom-confirm.ps1')
-                        try { if (Confirm-ZoomDialog $dialog) { exit 0 } }
+                        try {
+                            for ($scan=0; $scan -lt 3; $scan++) {
+                                if (Confirm-ZoomDialog $dialog) { exit 0 }
+                                Start-Sleep -Milliseconds 250
+                            }
+                        }
                         catch { exit 4 }
                         exit 4
                     }
                 }
                 Start-Sleep -Milliseconds 150
-            }
+            } while ([datetime]::UtcNow -lt $dialogDeadline)
         } else {
             $toggle = $buttons[0].GetCurrentPattern([Windows.Automation.TogglePattern]::Pattern)
             if ($toggle.Current.ToggleState -eq [Windows.Automation.ToggleState]::Off) { $toggle.Toggle() }
