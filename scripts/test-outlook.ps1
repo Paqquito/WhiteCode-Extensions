@@ -16,6 +16,10 @@ foreach ($operation in 'draft','meeting') {
         if ($operation -eq 'meeting') {
             if ($item.StartUTC.ToString('s') -ne '2027-01-06T09:00:00' -or $item.EndUTC.ToString('s') -ne '2027-01-06T09:30:00') { throw 'Incorrect meeting times.' }
             if ($item.Class -ne 26 -or $item.MeetingStatus -ne 1 -or $item.BusyStatus -ne 0 -or !$item.Body.Contains($parameters.VideoUrl)) { throw 'Incorrect invitation.' }
+            $refusal = ''
+            try { $null = & $script -Action send-meeting -Id $receipt.id -ToSelf }
+            catch { $refusal = $_.Exception.Message }
+            if ($refusal -notlike '*No verified Zoom link*') { throw 'Expected an unverified meeting to be refused.' }
         }
     } finally { $item.Delete() }
 }

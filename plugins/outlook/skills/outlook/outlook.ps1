@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)][ValidateSet('status','folders','latest','search','read','draft','availability','meeting')][string]$Action,
+    [Parameter(Mandatory)][ValidateSet('status','folders','latest','search','read','draft','availability','meeting','send-meeting')][string]$Action,
     [ValidateSet('inbox','sent')][string]$Folder = 'inbox',
     [string[]]$Subfolder = @(),
     [string]$FromDate, [string]$UntilDate, [string]$Query = '',
@@ -10,10 +10,11 @@ param(
     [string[]]$To = @(), [string[]]$Cc = @(),
     [string]$Start, [string]$End, [string]$Location, [string]$VideoUrl,
     [ValidateSet('Zoom','Tixeo')][string]$VideoProvider,
-    [switch]$Open
+    [switch]$Open, [switch]$SendInvitation, [switch]$ToSelf
 )
 $ErrorActionPreference = 'Stop'
 $culture = [Globalization.CultureInfo]::InvariantCulture
+. (Join-Path $PSScriptRoot 'meeting-send.ps1')
 
 function Get-Day([string]$value, [datetime]$fallback) {
     if (!$value) { return $fallback }
@@ -51,6 +52,14 @@ function Invoke-Outlook {
     catch { throw 'Open classic Outlook for Windows with a configured profile.' }
     $session = $app.Session
     if ($session.Accounts.Count -lt 1) { throw 'No configured Outlook account.' }
+    if ($SendInvitation -and ($Action -ne 'meeting' -or $VideoProvider -ne 'Zoom')) { throw 'SendInvitation requires a new Zoom meeting.' }
+    if ($ToSelf) {
+        if ($Action -notin 'meeting','send-meeting' -or $To.Count -or $Cc.Count) { throw 'ToSelf requires a meeting with no other recipients.' }
+        $self = Get-AttendeeKey $session.CurrentUser 1
+        $To = @($self.Substring(2))
+    }
+    if ($Action -eq 'send-meeting') { return Submit-ZoomMeeting $session $Id $To $Cc }
+    if ($SendInvitation -and !$To.Count -and !$Cc.Count) { throw 'Specify the intended recipients before scheduling.' }
     if ($Action -eq 'status') {
         $video = @($app.COMAddIns | Where-Object { $_.Connect -and $_.ProgId -match 'zoom|teams|tixeo|webex' } | ForEach-Object { $_.ProgId })
         return @{ outlookVersion=$app.Version; accountCount=$session.Accounts.Count; videoAddIns=$video }
@@ -217,6 +226,9 @@ function Invoke-Outlook {
                                     $stored = $session.GetItemFromID($result.id,$item.Parent.StoreID)
                                     $storedLinks = @(Get-ZoomLinks $stored.Body)
                                     if ($stored.Class -eq 26 -and $stored.MeetingStatus -eq 1 -and $added[0] -in $storedLinks) {
+                                        $proof = $stored.UserProperties.Add('WhiteCodeZoomProof',1,$false)
+                                        $proof.Value = Get-MeetingDigest ($stored.EntryID + '|' + $added[0])
+                                        $stored.Save()
                                         $result.videoStatus = 'zoom-link-verified'
                                         break
                                     }
@@ -227,6 +239,13 @@ function Invoke-Outlook {
                     }
                 } finally { $process.Dispose() }
             } catch { $result.videoStatus = 'check-open-invitation' }
+        }
+    }
+    if ($SendInvitation) {
+        $result.submission = @{ status='not-submitted' }
+        if ($result.videoStatus -eq 'zoom-link-verified') {
+            try { $result.submission = Submit-ZoomMeeting $session $result.id $To $Cc }
+            catch { $result.submission = @{status='check-outlook'; detail=$_.Exception.Message} }
         }
     }
     return $result
