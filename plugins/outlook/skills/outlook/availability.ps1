@@ -114,8 +114,12 @@ function Find-MeetingAlternatives($calendars,[datetimeoffset]$start,[datetimeoff
                 $states = @(Get-MeetingStates $calendars $candidate $finish)
                 if ('occupied-or-tentative' -notin $states.availability) {
                     $unknown = @($states | Where-Object availability -eq 'unknown' | ForEach-Object { $_.person })
+                    $label = $candidate.ToString('HH:mm') + ' – ' + $finish.ToString('HH:mm')
+                    if ($offset -gt 0) {
+                        $label = $candidate.ToString('ddd d MMM yyyy', [cultureinfo]'fr-FR') + ' · ' + $label
+                    }
                     $slot = @{ start=$candidate.ToString('yyyy-MM-ddTHH:mm:sszzz'); end=$finish.ToString('yyyy-MM-ddTHH:mm:sszzz')
-                        label=($candidate.ToString('dd/MM/yyyy HH:mm') + ' - ' + $finish.ToString('HH:mm')); unknown=$unknown }
+                        label=$label; unknown=$unknown }
                     if (!$unknown.Count) { $confirmed += $slot } elseif ($provisional.Count -lt 3) { $provisional += $slot }
                     if ($confirmed.Count -eq 3) { return $confirmed }
                 }
@@ -133,12 +137,19 @@ function New-MeetingConflictChoice($calendars,$states,[datetimeoffset]$start,[da
         $description = if ($slot.unknown.Count) { 'Disponibilité à confirmer pour ' + ($slot.unknown -join ', ') } else { 'Libre pour tous les participants.' }
         @{ label=$slot.label; description=$description }
     })
-    $requested = $start.ToLocalTime().ToString('dd/MM/yyyy HH:mm') + ' - ' + $end.ToLocalTime().ToString('dd/MM/yyyy HH:mm')
+    $begin = $start.ToLocalTime()
+    $finish = $end.ToLocalTime()
+    $requested = 'le ' + $begin.ToString('dddd d MMMM yyyy', [cultureinfo]'fr-FR') + ' de ' + $begin.ToString('HH:mm') + ' à ' + $finish.ToString('HH:mm')
+    $keepDetail = $begin.ToString('HH:mm') + ' – ' + $finish.ToString('HH:mm')
+    if ($begin.Date -ne $finish.Date) {
+        $keepDetail = $begin.ToString('dd/MM/yyyy HH:mm') + ' – ' + $finish.ToString('dd/MM/yyyy HH:mm')
+        $requested = 'du ' + $begin.ToString('dd/MM/yyyy HH:mm') + ' au ' + $finish.ToString('dd/MM/yyyy HH:mm')
+    }
     $keepLabel = 'Conserver le créneau demandé'
-    $options += @{ label=$keepLabel; description=$requested }
+    $options += @{ label=$keepLabel; description=$keepDetail }
     if (!$suggestions.Count) { $options += @{ label='Choisir un autre horaire'; description='Indiquer une autre date ou heure.' } }
-    $question = @{ header='Horaire'; require_answer=$true
-        question="Sur le créneau du $requested, Outlook indique une indisponibilité pour $($busy -join ', '). Quel horaire souhaitez-vous retenir ?"; options=$options }
+    $question = @{ header='Créneau pris'; require_answer=$true
+        question="Un engagement est déjà prévu pour $($busy -join ', ') $requested. Quel horaire préférez-vous ?"; options=$options }
     $originalStart = $start.ToString('yyyy-MM-ddTHH:mm:sszzz')
     $originalEnd = $end.ToString('yyyy-MM-ddTHH:mm:sszzz')
     return @{ status='availability-choice-required'; action='meeting'; saved=$false; opened=$false; start=$originalStart; end=$originalEnd

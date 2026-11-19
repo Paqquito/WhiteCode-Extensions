@@ -38,6 +38,10 @@ foreach ($slot in $choice.suggestions) {
     if ($start -lt $finish.AddMinutes(45) -or $end-$start -ne $finish-$requested -or $slot.unknown.Count) { throw 'Invalid shared slot.' }
 }
 if ($recipient.calls -ne 1) { throw 'The Exchange grid should be reused for every candidate.' }
+if ($choice.suggestions[0].label -notmatch '^\d{2}:\d{2}' -or $choice.questions[0].options[0].label -cne $choice.suggestions[0].label) { throw 'Same-day choice lost its selectable time label.' }
+$lateStart = [datetimeoffset]$monday.AddHours(17)
+$nextDay = @(Find-MeetingAlternatives $calendars $lateStart $lateStart.AddHours(1))[0]
+if ($nextDay.label -notmatch ([regex]::Escape($monday.AddDays(1).ToString('ddd d MMM yyyy',[cultureinfo]'fr-FR')))) { throw 'Missing date on a later-day choice.' }
 if (!$choice.questions[0].require_answer -or $choice.questions[0].options[$choice.suggestions.Count].description -notmatch '10:00') { throw 'Missing explicit choice to keep the requested time.' }
 $remote.days.Clear()
 $remote.unavailable = $true
