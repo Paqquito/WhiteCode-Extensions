@@ -38,6 +38,11 @@ function Add-Recipients($item, [string[]]$addresses, [int]$kind) {
 function Clip([string]$text, [int]$length) {
     return $text.Substring(0,[Math]::Min($text.Length,$length))
 }
+function Get-ZoomLinks([string]$text) {
+    foreach ($match in [regex]::Matches($text,'(?i)https://(?:[a-z0-9-]+\.)*(?:zoom\.us|zoom\.com|zoomgov\.com|zoom\.com\.cn)/j/[0-9]{9,11}(?=[?#\s<>")\x27]|$)[^\s<>"]*')) {
+        $match.Value.TrimEnd('.',',',')',"'")
+    }
+}
 function Invoke-Outlook {
     if ($VideoProvider -and ($Action -ne 'meeting' -or $VideoUrl)) {
         throw 'Use VideoProvider only for a new meeting without a supplied link.'
@@ -183,6 +188,7 @@ function Invoke-Outlook {
         catch { $result.openError='Saved. Open the item in Outlook.' }
     }
     if ($VideoProvider) {
+        $originalLinks = @(Get-ZoomLinks $Body)
         $result.videoProvider = $VideoProvider
         $result.videoStatus = 'manual-action-required'
         if ($result.opened) {
@@ -193,7 +199,7 @@ function Invoke-Outlook {
                 $ps = Join-Path $env:SystemRoot 'System32/WindowsPowerShell/v1.0/powershell.exe'
                 $process = Start-Process -FilePath $ps -ArgumentList @('-NoProfile','-NonInteractive','-File',('"' + $worker + '"'),'-Window',$handle,'-Provider',$VideoProvider) -PassThru -WindowStyle Hidden
                 try {
-                    if (!$process.WaitForExit(12000)) {
+                    if (!$process.WaitForExit(20000)) {
                         $process.Kill()
                         $result.videoStatus = 'check-open-invitation'
                     } elseif ($process.ExitCode -eq 4) {
@@ -202,6 +208,22 @@ function Invoke-Outlook {
                         $result.videoStatus = 'addin-command-disabled'
                     } elseif ($process.ExitCode -eq 0) {
                         $result.videoStatus = if ($VideoProvider -eq 'Zoom') { 'check-open-invitation' } else { 'tixeo-enabled' }
+                        if ($VideoProvider -eq 'Zoom') {
+                            $until = [datetime]::UtcNow.AddSeconds(15)
+                            do {
+                                $added = @(Get-ZoomLinks $item.Body | Where-Object { $_ -notin $originalLinks })
+                                if ($added.Count) {
+                                    $item.Save()
+                                    $stored = $session.GetItemFromID($result.id,$item.Parent.StoreID)
+                                    $storedLinks = @(Get-ZoomLinks $stored.Body)
+                                    if ($stored.Class -eq 26 -and $stored.MeetingStatus -eq 1 -and $added[0] -in $storedLinks) {
+                                        $result.videoStatus = 'zoom-link-verified'
+                                        break
+                                    }
+                                }
+                                Start-Sleep -Milliseconds 250
+                            } while ([datetime]::UtcNow -lt $until)
+                        }
                     }
                 } finally { $process.Dispose() }
             } catch { $result.videoStatus = 'check-open-invitation' }

@@ -32,7 +32,12 @@ do {
             $dialogs = New-Object Windows.Automation.PropertyCondition($element::ControlTypeProperty,[Windows.Automation.ControlType]::Window)
             for ($attempt=0; $attempt -lt 12; $attempt++) {
                 foreach ($dialog in $root.FindAll($tree,$dialogs)) {
-                    if ($dialog.Current.Name -match '^Zoom\s*[-\u2013]\s*(Planifier une r.union|Schedule a Meeting)$') { exit 4 }
+                    if ($dialog.Current.Name -match '^Zoom\s*[-\u2013]\s*(Planifier une r.union|Schedule a Meeting)$') {
+                        . (Join-Path $PSScriptRoot 'zoom-confirm.ps1')
+                        try { if (Confirm-ZoomDialog $dialog) { exit 0 } }
+                        catch { exit 4 }
+                        exit 4
+                    }
                 }
                 Start-Sleep -Milliseconds 150
             }
