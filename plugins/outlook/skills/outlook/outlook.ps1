@@ -51,7 +51,7 @@ function Invoke-Outlook {
         if ($ends -le $starts) { throw 'End must be later than Start.' }
         if ($VideoProvider -eq 'Zoom' -and $ends -le [datetimeoffset]::Now) {
             $result = @{ action='meeting'; saved=$false; opened=$false; videoProvider='Zoom'; videoStatus='meeting-ended'; verifiedZoomLink=$false
-                detail='The requested end time has passed. Ask the user for a new time.' }
+                detail='The time slot has ended. No appointment or Zoom link was created. No invitation was sent. Ask only for a new time.' }
             if ($SendInvitation) { $result.submission = @{status='not-submitted'} }
             return $result
         }
