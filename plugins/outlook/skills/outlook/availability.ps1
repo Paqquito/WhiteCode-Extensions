@@ -126,22 +126,30 @@ function New-MeetingConflictChoice($calendars,$states,[datetimeoffset]$start,[da
         @{ label=$slot.label; description=$description }
     })
     $requested = $start.ToLocalTime().ToString('dd/MM/yyyy HH:mm') + ' - ' + $end.ToLocalTime().ToString('dd/MM/yyyy HH:mm')
-    $options += @{ label='Conserver le créneau demandé'; description=$requested }
+    $keepLabel = 'Conserver le créneau demandé'
+    $options += @{ label=$keepLabel; description=$requested }
     if (!$suggestions.Count) { $options += @{ label='Choisir un autre horaire'; description='Indiquer une autre date ou heure.' } }
     $question = @{ header='Horaire'; require_answer=$true
         question="Sur le créneau du $requested, Outlook indique une indisponibilité pour $($busy -join ', '). Quel horaire souhaitez-vous retenir ?"; options=$options }
     $originalStart = $start.ToString('yyyy-MM-ddTHH:mm:sszzz')
     $originalEnd = $end.ToString('yyyy-MM-ddTHH:mm:sszzz')
-    if ($env:TOOL_CHOICE_NONCE) {
-        # The host waits for the person and exposes just the selected receipt.
-        $receipts = @(foreach ($slot in $suggestions) {
-            ConvertTo-Json -Compress @{status='selected-time'; start=$slot.start; end=$slot.end; saved=$false}
-        })
-        $receipts += ConvertTo-Json -Compress @{status='keep-requested-time'; start=$originalStart; end=$originalEnd; keepSlot=$keepToken; saved=$false}
-        if (!$suggestions.Count) { $receipts += 'Ask the user for a new date and time. No appointment has been saved.' }
-        return [ordered]@{choiceNonce=$env:TOOL_CHOICE_NONCE; question=$question; receipts=$receipts}
-    }
     return @{ status='availability-choice-required'; action='meeting'; saved=$false; opened=$false; start=$originalStart; end=$originalEnd
-        people=$states; suggestions=$suggestions; keepSlot=$keepToken; questions=@($question)
+        people=$states; suggestions=$suggestions; keepLabel=$keepLabel; keepSlot=$keepToken; questions=@($question)
     }
+}
+
+function Read-MeetingChoice($question) {
+    $pipe = [IO.Pipes.NamedPipeClientStream]::new('.', $env:TOOL_CHOICE_PIPE, [IO.Pipes.PipeDirection]::InOut)
+    try {
+        $pipe.Connect(3000)
+        $utf8 = [Text.UTF8Encoding]::new($false)
+        $writer = [IO.StreamWriter]::new($pipe,$utf8,1024,$true)
+        $reader = [IO.StreamReader]::new($pipe,$utf8,$false,1024,$true)
+        $writer.WriteLine((ConvertTo-Json $question -Depth 5 -Compress))
+        $writer.Flush()
+        $line = $reader.ReadLine()
+        if ($line) { return ($line | ConvertFrom-Json) }
+    } catch { Write-Verbose 'The decision panel is unavailable.' }
+    finally { $pipe.Dispose() }
+    return @{none=$true}
 }

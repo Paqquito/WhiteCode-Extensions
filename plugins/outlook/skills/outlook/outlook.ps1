@@ -150,19 +150,33 @@ function Invoke-Outlook {
             $uri = [uri]$VideoUrl
             if (!$uri.IsAbsoluteUri -or $uri.Scheme -ne 'https' -or $uri.UserInfo -or $VideoUrl -match '\s') { throw 'Supply an HTTPS meeting link.' }
         }
-        $firstDay = $starts.LocalDateTime.Date
-        $until = $firstDay.AddDays(7)
-        if ($ends.LocalDateTime -ge $until) { $until = $ends.LocalDateTime.Date.AddDays(1) }
-        $calendars = Read-MeetingCalendars $session ($To + $Cc) $firstDay $until
-        $states = @(Get-MeetingStates $calendars $starts $ends)
-        if ('occupied-or-tentative' -in $states.availability) {
+        $confirmedSlot = if (!$env:TOOL_CHOICE_PIPE) { $KeepSlot }
+        while ($true) {
+            $firstDay = $starts.LocalDateTime.Date
+            $until = $firstDay.AddDays(7)
+            if ($ends.LocalDateTime -ge $until) { $until = $ends.LocalDateTime.Date.AddDays(1) }
+            $calendars = Read-MeetingCalendars $session ($To + $Cc) $firstDay $until
+            $states = @(Get-MeetingStates $calendars $starts $ends)
+            if ('occupied-or-tentative' -notin $states.availability) { break }
             # A reply for one time, attendee list or set of conflicts cannot
             # silently override a newer conflict. Alternatives are checked anew.
             $decision = [ordered]@{ subject=$Subject; start=$starts.UtcTicks; end=$ends.UtcTicks; to=$To; cc=$Cc
                 provider=$VideoProvider; send=$SendInvitation.IsPresent; organizer=$session.CurrentUser.AddressEntry.ID
                 availability=@($states | ForEach-Object { @($_.person,$_.availability) -join '|' }) }
             $token = (Get-MeetingDigest (ConvertTo-Json -InputObject $decision -Compress)).Substring(0,16)
-            if ($KeepSlot -cne $token) { return New-MeetingConflictChoice $calendars $states $starts $ends $token }
+            if ($confirmedSlot -ceq $token) { break }
+            $choice = New-MeetingConflictChoice $calendars $states $starts $ends $token
+            if (!$env:TOOL_CHOICE_PIPE) { return $choice }
+            $reply = Read-MeetingChoice $choice.questions[0]
+            if ($reply.other) { return @{status='alternative-entered'; requested=$reply.other; saved=$false; opened=$false} }
+            if ($reply.none -or @($reply.labels).Count -ne 1) { return @{status='choice-skipped'; saved=$false; opened=$false} }
+            $label = $reply.labels[0]
+            if ($label -ceq $choice.keepLabel) { $confirmedSlot = $token; continue }
+            $slot = $choice.suggestions | Where-Object { $_.label -ceq $label } | Select-Object -First 1
+            if (!$slot) { return @{status='ask-for-new-time'; saved=$false; opened=$false} }
+            $starts = Get-Instant $slot.start
+            $ends = Get-Instant $slot.end
+            $confirmedSlot = $null
         }
         # Outlook converts appointments moved to the mail Drafts folder into plain messages.
         $item = $app.CreateItem(1)
@@ -188,6 +202,8 @@ function Invoke-Outlook {
     $storeId = $item.Parent.StoreID
     $result = @{ id=$item.EntryID; folder=$item.Parent.Name; action=$Action; saved=$true; opened=$false; recipients=$item.Recipients.Count }
     if ($Action -eq 'meeting') {
+        $result.start = $starts.ToString('yyyy-MM-ddTHH:mm:sszzz')
+        $result.end = $ends.ToString('yyyy-MM-ddTHH:mm:sszzz')
         $result.unknownAvailability = @($states | Where-Object availability -eq 'unknown' | ForEach-Object { $_.person })
     }
     if ($Open -or $VideoProvider) {

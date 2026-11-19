@@ -25,14 +25,7 @@ foreach ($slot in $choice.suggestions) {
     if ($start -lt $finish.AddMinutes(45) -or $end-$start -ne $finish-$requested -or $slot.unknown.Count) { throw 'Invalid shared slot.' }
 }
 if ($recipient.calls -ne 1) { throw 'The Exchange grid should be reused for every candidate.' }
-$previousNonce = $env:TOOL_CHOICE_NONCE
-try {
-    $env:TOOL_CHOICE_NONCE = [guid]::NewGuid().ToString()
-    $panel = New-MeetingConflictChoice $calendars $states $requested $finish 'keep-test'
-    if ($panel.choiceNonce -ne $env:TOOL_CHOICE_NONCE -or $panel.receipts.Count -ne $panel.question.options.Count) { throw 'Invalid interactive command receipt.' }
-    if (($panel.receipts[0] | ConvertFrom-Json).start -ne $choice.suggestions[0].start -or $panel.receipts[0].Contains('keep-test')) { throw 'Incorrect alternative receipt.' }
-    if (($panel.receipts[-1] | ConvertFrom-Json).keepSlot -ne 'keep-test') { throw 'Missing explicit override receipt.' }
-} finally { $env:TOOL_CHOICE_NONCE = $previousNonce }
+if (!$choice.questions[0].require_answer -or $choice.questions[0].options[$choice.suggestions.Count].description -notmatch '10:00') { throw 'Missing explicit choice to keep the requested time.' }
 $remote.days.Clear()
 $remote.unavailable = $true
 $calendars.local.intervals = @(@{start=$requested.UtcDateTime; end=$finish.UtcDateTime})

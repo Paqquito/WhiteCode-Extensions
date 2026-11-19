@@ -18,8 +18,8 @@ Pour Zoom, laissez le script fermer la fenêtre de préparation après enregistr
 
 Lancez d’abord `-Action meeting` avec l’horaire demandé, via `run_powershell` au premier plan. Laissez le script écrire son JSON directement. En cas de conflit, le desktop affiche le panneau et renvoie le choix effectué. Une demande initiale d’organiser ou d’envoyer la réunion ne vaut pas choix d’ignorer le conflit.
 
-- Sur `selected-time`, reprenez exactement `start` et `end` du reçu. Relancez la même commande sans `-KeepSlot`.
-- Sur `keep-requested-time`, relancez la commande d’origine et ajoutez `-KeepSlot` avec la valeur `keepSlot` du reçu.
+- Le script attend la sélection, revérifie les disponibilités et applique lui-même l’horaire retenu. Quand `saved=true`, annoncez les dates `start` et `end` du reçu. Une seule commande suffit.
+- Sur `alternative-entered`, interprétez la réponse libre et proposez l’horaire indiqué au script. Sur `ask-for-new-time`, demandez une date. Sur `choice-skipped`, terminez la préparation.
 - Sur un hôte sans panneau intégré, `availability-choice-required` demande de présenter les questions du reçu et d’attendre la réponse.
 - Pour un horaire saisi librement, vérifiez-le par la même commande. Si la personne passe, annule ou ne répond pas, arrêtez-vous sans créer ni envoyer. Si le panneau est indisponible, posez la même question dans le chat et attendez.
 
