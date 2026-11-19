@@ -1,4 +1,12 @@
 ﻿# One local recurrence query and reusable Exchange free/busy grids per meeting.
+function Test-LocalCalendarConflict($item) {
+    # Canceled meetings and declined invitations can remain in the Calendar folder.
+    $meeting = $item.MeetingStatus
+    if ($meeting -in 5,7 -or $item.ResponseStatus -eq 4) { return $false }
+    # Older organizer meetings were saved as olFree, even after submission.
+    return ($meeting -in 1,3 -or $item.BusyStatus -ne 0)
+}
+
 function Read-MeetingCalendars($session,[string[]]$addresses,[datetime]$firstDay,[datetime]$until) {
     $local = @{ person=$session.CurrentUser.Name; intervals=@(); known=$false }
     try {
@@ -7,7 +15,7 @@ function Read-MeetingCalendars($session,[string[]]$addresses,[datetime]$firstDay
         $items.IncludeRecurrences = $true
         $range = $items.Restrict("[Start] < '" + $until.ToString('g') + "' AND [End] > '" + $firstDay.ToString('g') + "'")
         $local.intervals = @(for ($item=$range.GetFirst(); $null -ne $item; $item=$range.GetNext()) {
-            if ($item.BusyStatus -ne 0) { @{ start=$item.StartUTC; end=$item.EndUTC } }
+            if (Test-LocalCalendarConflict $item) { @{ start=$item.StartUTC; end=$item.EndUTC } }
         })
         $local.known = $true
     } catch { Write-Verbose 'Personal calendar unavailable.' }
@@ -149,7 +157,10 @@ function Find-PreparedMeeting($session,[string]$subject,[datetimeoffset]$start,[
         "' AND [Start] >= '" + $day.ToString('g') + "' AND [Start] < '" + $day.AddDays(7).ToString('g') + "'")
     for ($item=$items.GetFirst(); $null -ne $item; $item=$items.GetNext()) {
         $marker = $item.UserProperties.Find('WhiteCodeScheduleChoice')
-        if ($marker -and $key -cin ($marker.Value -split ' ')) { return $item }
+        if ($marker) {
+            $keys = $marker.Value -split ' '
+            if ($key -cin $keys) { return @{item=$item; userSelected=($keys.Count -gt 1)} }
+        }
     }
 }
 

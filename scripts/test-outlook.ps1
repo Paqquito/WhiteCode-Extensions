@@ -69,7 +69,12 @@ foreach ($operation in 'draft','meeting') {
         }
         if ($operation -eq 'meeting') {
             if ($item.StartUTC.ToString('s') -ne '2027-01-06T09:00:00' -or $item.EndUTC.ToString('s') -ne '2027-01-06T09:30:00') { throw 'Incorrect meeting times.' }
-            if ($item.Class -ne 26 -or $item.MeetingStatus -ne 1 -or $item.BusyStatus -ne 0 -or !$item.Body.Contains($parameters.VideoUrl)) { throw 'Incorrect invitation.' }
+            if ($item.Class -ne 26 -or $item.MeetingStatus -ne 1 -or $item.BusyStatus -ne 2 -or !$item.Body.Contains($parameters.VideoUrl)) { throw 'Incorrect invitation or free/busy status.' }
+            # Reproduce a meeting left by older versions of the extension.
+            $item.BusyStatus = 0
+            $item.Save()
+            $availability = & $script -Action availability -Start $parameters.Start -End $parameters.End | ConvertFrom-Json
+            if ($availability.people[0].availability -ne 'occupied-or-tentative') { throw 'Legacy meeting marked free was skipped.' }
             $refusal = ''
             try { $null = & $script -Action send-meeting -Id $receipt.id -ToSelf }
             catch { $refusal = $_.Exception.Message }

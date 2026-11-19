@@ -155,11 +155,12 @@ function Invoke-Outlook {
             $requestScope = ConvertTo-Json -Compress -InputObject ([ordered]@{turn=$env:TOOL_TURN_ID; subject=$Subject; duration=($ends-$starts).Ticks
                 required=@($To | Sort-Object); optional=@($Cc | Sort-Object); provider=$VideoProvider; url=$VideoUrl; send=$SendInvitation.IsPresent})
             $originalKey = Get-MeetingDigest ($requestScope + '|' + $starts.UtcTicks)
-            $stored = Find-PreparedMeeting $session $Subject $starts $originalKey
-            if ($stored) {
+            $previous = Find-PreparedMeeting $session $Subject $starts $originalKey
+            if ($previous) {
+                $stored = $previous.item
                 $receipt = @{action='meeting'; status='already-saved'; saved=$true; id=$stored.EntryID; start=([datetimeoffset]$stored.Start).ToString('o')
-                    end=([datetimeoffset]$stored.End).ToString('o'); recipients=$stored.Recipients.Count
-                    confirmedSchedule=(Get-ConfirmedScheduleText $stored.Start $stored.End)}
+                    end=([datetimeoffset]$stored.End).ToString('o'); recipients=$stored.Recipients.Count}
+                if ($previous.userSelected) { $receipt.confirmedSchedule = Get-ConfirmedScheduleText $stored.Start $stored.End }
                 if ($SendInvitation) {
                     $submitted = $stored.PropertyAccessor.GetProperty('http://schemas.microsoft.com/mapi/id/{00062002-0000-0000-C000-000000000046}/8229000B')
                     $receipt.submission = @{status=$(if ($submitted) { 'already-submitted' } else { 'not-submitted' })}
@@ -198,13 +199,15 @@ function Invoke-Outlook {
         # Outlook converts appointments moved to the mail Drafts folder into plain messages.
         $item = $app.CreateItem(1)
         $item.MeetingStatus = 1
-        $item.BusyStatus = 0
+        $item.BusyStatus = 2 # olBusy
         $item.StartUTC = $starts.UtcDateTime
         $item.EndUTC = $ends.UtcDateTime
-        if ($selectedLabel -and $originalKey) {
-            $selectedKey = Get-MeetingDigest ($requestScope + '|' + $starts.UtcTicks)
+        if ($originalKey) {
             $marker = $item.UserProperties.Add('WhiteCodeScheduleChoice',1,$false)
-            $marker.Value = "$originalKey $selectedKey"
+            $marker.Value = if ($selectedLabel) {
+                $selectedKey = Get-MeetingDigest ($requestScope + '|' + $starts.UtcTicks)
+                "$originalKey $selectedKey"
+            } else { $originalKey }
         }
         $item.Location = if ($Location) { $Location } else { $VideoUrl }
         if ($VideoUrl) { $Body = "$Body" + [Environment]::NewLine + $VideoUrl }

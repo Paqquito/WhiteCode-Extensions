@@ -1,5 +1,18 @@
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot '../plugins/outlook/skills/outlook/availability.ps1')
+foreach ($case in @(
+    @{meeting=1; response=1; busy=0; conflict=$true}, # Legacy organizer meeting
+    @{meeting=3; response=3; busy=0; conflict=$true}, # Accepted meeting marked free
+    @{meeting=0; response=0; busy=0; conflict=$false},
+    @{meeting=0; response=0; busy=1; conflict=$true},
+    @{meeting=0; response=0; busy=2; conflict=$true},
+    @{meeting=5; response=1; busy=2; conflict=$false},
+    @{meeting=7; response=3; busy=2; conflict=$false},
+    @{meeting=3; response=4; busy=2; conflict=$false}
+)) {
+    $appointment = @{MeetingStatus=$case.meeting; ResponseStatus=$case.response; BusyStatus=$case.busy}
+    if ((Test-LocalCalendarConflict $appointment) -ne $case.conflict) { throw "Incorrect local conflict: $($case | ConvertTo-Json -Compress)" }
+}
 # Use a future Monday independent of the workstation date.
 $monday = [datetime]::Today.AddDays(1)
 while ($monday.DayOfWeek -ne 'Monday') { $monday = $monday.AddDays(1) }
