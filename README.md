@@ -9,6 +9,15 @@ Catalogue de plugins de WhiteCode.
 | Plugin | Dossier | Contenu |
 |---|---|---|
 | Bureautique (`whitecode-office`) | `plugins/office/` | 4 skills (Word, Excel, PowerPoint, PDF) et `office.cjs`, le runtime qui embarque exceljs, docx, pptxgenjs et pdf-lib |
+| Outlook (`whitecode-outlook`) | `plugins/outlook/` | Recherche par période et mots-clés, lecture, synthèses, brouillons et invitations dans Outlook classique pour Windows |
+
+### Utiliser Outlook
+
+Installez et activez **Outlook** dans le catalogue des extensions sur une révision qui contient le plugin. Le plugin utilise le profil Outlook classique de la session Windows. Le nouvel Outlook et Outlook Web ne fournissent pas cette interface. Aucun jeton ni service supplémentaire à configurer.
+
+Demandez par exemple « Résume ma boîte de réception depuis lundi et liste les décisions », « Cherche budget dans les messages envoyés la semaine dernière » ou « Prépare deux brouillons séparés pour les destinataires suivants ». La recherche porte sur les champs du message et le corps en texte brut. Elle couvre le dossier demandé du compte par défaut, avec pagination. Les extraits lus entrent dans la conversation avec le fournisseur de modèle sélectionné. Pour une boîte professionnelle, choisissez un fournisseur autorisé à traiter ses messages.
+
+Pour une réunion, précisez participants, date, heure et durée. L’invitation est enregistrée sans envoi dans le calendrier personnel, avec le statut Disponible. Les courriels restent dans Brouillons. Un lien de visio fourni peut y être inséré. Pour générer un nouveau lien, ouvrez le brouillon et utilisez votre complément de visioconférence avant l’envoi.
 
 ### Générer un document
 

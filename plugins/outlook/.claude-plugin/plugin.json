@@ -1,0 +1,9 @@
+{
+  "name": "whitecode-outlook",
+  "version": "1.0.0",
+  "description": "Messagerie et réunions dans Outlook classique pour Windows.",
+  "skills": "./skills/",
+  "author": {
+    "name": "WhiteCode"
+  }
+}
