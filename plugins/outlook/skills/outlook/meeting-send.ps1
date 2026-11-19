@@ -1,4 +1,4 @@
-# Send only a Zoom appointment prepared and verified by this extension.
+. (Join-Path $PSScriptRoot 'tixeo-link.ps1')
 function Get-MeetingDigest([string]$value) {
     $sha = [Security.Cryptography.SHA256]::Create()
     try { return [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($value))).Replace('-','') }
@@ -20,16 +20,23 @@ function Get-ZoomJoinUrl($appointment) {
     if ($targets.Count -eq 1 -and $qualified.Count -eq 1) { return $qualified[0] }
 }
 
-function Save-ZoomLinkProof($session,$item,[string[]]$originalLinks) {
+function Get-MeetingJoinUrl($item,[string]$provider,[string]$origin) {
+    if ($provider -eq 'Zoom') { return Get-ZoomJoinUrl $item }
+    $urls = @(Get-TixeoLinks "$($item.Body)`n$($item.Location)" $origin | Sort-Object -CaseSensitive -Unique)
+    if ($urls.Count -eq 1) { return $urls[0] }
+}
+
+function Save-MeetingLinkProof($session,$item,[string]$provider,[string]$origin,[string[]]$originalLinks) {
     $until = [datetime]::UtcNow.AddSeconds(20)
     do {
-        $url = Get-ZoomJoinUrl $item
+        $url = Get-MeetingJoinUrl $item $provider $origin
         if ($url -and $url -cnotin $originalLinks) {
             $item.Save()
             $stored = $session.GetItemFromID($item.EntryID,$item.Parent.StoreID)
-            if ($stored.Class -eq 26 -and $stored.MeetingStatus -eq 1 -and (Get-ZoomJoinUrl $stored) -ceq $url) {
-                $proof = $stored.UserProperties.Find('WhiteCodeZoomProof')
-                if (!$proof) { $proof = $stored.UserProperties.Add('WhiteCodeZoomProof',1,$false) }
+            if ($stored.Class -eq 26 -and $stored.MeetingStatus -eq 1 -and (Get-MeetingJoinUrl $stored $provider $origin) -ceq $url) {
+                $property = "WhiteCode${provider}Proof"
+                $proof = $stored.UserProperties.Find($property)
+                if (!$proof) { $proof = $stored.UserProperties.Add($property,1,$false) }
                 $proof.Value = Get-MeetingDigest ($stored.EntryID + '|' + $url)
                 $stored.Save()
                 return $true
@@ -52,7 +59,24 @@ function Get-AttendeeKey($recipient, [int]$role) {
     }
     return "$role|$($address.ToLowerInvariant())"
 }
-function Submit-ZoomMeeting($session, [string]$entryId, [string[]]$required, [string[]]$optional) {
+function Find-MeetingInspector($app,[string]$storeId,[string]$entryId) {
+    foreach ($inspector in $app.Inspectors) {
+        $item = $inspector.CurrentItem
+        if ($item.Class -eq 26 -and $item.EntryID -eq $entryId -and $item.Parent.StoreID -eq $storeId) { return $inspector }
+    }
+}
+
+function Close-SubmittedMeeting($app,[string]$storeId,[string]$entryId) {
+    try {
+        $inspector = Find-MeetingInspector $app $storeId $entryId
+        if (!$inspector) { return $true }
+        if (!$inspector.CurrentItem.Saved) { return $false }
+        $inspector.Close(0)
+        return !(Find-MeetingInspector $app $storeId $entryId)
+    } catch { return $false }
+}
+
+function Submit-VideoMeeting($session, [string]$entryId, [string[]]$required, [string[]]$optional) {
     if ($entryId -notmatch '^[0-9a-fA-F]{8,4096}$' -or !(@($required).Count + @($optional).Count)) {
         throw 'Supply the saved meeting ID and its intended attendees.'
     }
@@ -66,11 +90,15 @@ function Submit-ZoomMeeting($session, [string]$entryId, [string[]]$required, [st
         if ($meeting.Class -ne 26 -or $meeting.MeetingStatus -ne 1 -or $meeting.Parent.EntryID -ne $calendar.EntryID) {
             throw 'Expected an organizer appointment in the default calendar.'
         }
-        if (!$meeting.Saved) { throw 'Save your Outlook edits before submission.' }
-        $proof = $meeting.UserProperties.Find('WhiteCodeZoomProof')
-        if (!$proof) { throw 'No verified Zoom link receipt for this appointment.' }
-        $url = Get-ZoomJoinUrl $meeting
-        if (!$url -or (Get-MeetingDigest ($meeting.EntryID + '|' + $url)) -ne $proof.Value) { throw 'The verified Zoom link is missing, changed or ambiguous.' }
+        $inspector = Find-MeetingInspector $session.Application $calendar.StoreID $entryId
+        if (!$meeting.Saved -or ($inspector -and !$inspector.CurrentItem.Saved)) { throw 'Save your Outlook edits before submission.' }
+        $providers = @(foreach ($name in 'Zoom','Tixeo') { if ($meeting.UserProperties.Find("WhiteCode${name}Proof")) { $name } })
+        if ($providers.Count -ne 1) { throw 'Expected one verified video link receipt for this appointment.' }
+        $provider = $providers[0]
+        $origin = if ($provider -eq 'Tixeo') { Get-TixeoOrigin }
+        $proof = $meeting.UserProperties.Find("WhiteCode${provider}Proof")
+        $url = Get-MeetingJoinUrl $meeting $provider $origin
+        if (!$url -or (Get-MeetingDigest ($meeting.EntryID + '|' + $url)) -ne $proof.Value) { throw "The verified $provider link is missing, changed or ambiguous." }
 
         $expected = @(
             foreach ($name in $required) { Get-AttendeeKey ($session.CreateRecipient($name)) 1 }
@@ -91,8 +119,9 @@ function Submit-ZoomMeeting($session, [string]$entryId, [string[]]$required, [st
             throw 'Outlook attendees or roles differ from the requested list. Invitation retained.'
         }
         # FInvited also detects manual sends through the Outlook inspector.
-        if ($meeting.PropertyAccessor.GetProperty('http://schemas.microsoft.com/mapi/id/{00062002-0000-0000-C000-000000000046}/8229000B')) {
-            return @{status='already-submitted'; id=$entryId}
+        $invited = 'http://schemas.microsoft.com/mapi/id/{00062002-0000-0000-C000-000000000046}/8229000B'
+        if ($meeting.PropertyAccessor.GetProperty($invited)) {
+            return @{status='already-submitted'; id=$entryId; windowClosed=(Close-SubmittedMeeting $session.Application $calendar.StoreID $entryId)}
         }
         $attempt = $meeting.UserProperties.Find('WhiteCodeSubmitAttempt')
         if ($attempt) { throw 'Submission already attempted. Check Outbox and Sent Items before any manual retry.' }
@@ -100,7 +129,18 @@ function Submit-ZoomMeeting($session, [string]$entryId, [string[]]$required, [st
         $attempt.Value = [datetime]::UtcNow.ToString('o')
         $meeting.Save()
         $meeting.Send()
-        return @{status='submitted'; id=$entryId; verifiedParticipants=$actual.Count; verifiedZoomLink=$true}
+        $deadline = [datetime]::UtcNow.AddSeconds(4)
+        do {
+            $updated = $session.GetItemFromID($entryId,$calendar.StoreID)
+            if ($updated.PropertyAccessor.GetProperty($invited)) {
+                $receipt = @{status='submitted'; id=$entryId; verifiedParticipants=$actual.Count; videoProvider=$provider
+                    windowClosed=(Close-SubmittedMeeting $session.Application $calendar.StoreID $entryId)}
+                $receipt["verified${provider}Link"] = $true
+                return $receipt
+            }
+            Start-Sleep -Milliseconds 200
+        } while ([datetime]::UtcNow -lt $deadline)
+        return @{status='check-outlook'; id=$entryId; detail='Outlook has not confirmed submission. Do not send again.'}
     } finally {
         if ($held) { $mutex.ReleaseMutex() }
         $mutex.Dispose()

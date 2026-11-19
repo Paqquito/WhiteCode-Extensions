@@ -15,6 +15,20 @@ foreach ($sample in @(
 )) {
     if ((Get-ZoomJoinUrl $sample) -cne $sample.Expected) { throw 'Unexpected Zoom join URL selection.' }
 }
+$origin = 'https://video.example.org'
+$tixeo = "$origin/meet/meeting/join?umi=Example123"
+foreach ($sample in @(
+    @{ Body=$tixeo; Location=$tixeo; Expected=$tixeo },
+    @{ Body='Agenda'; Location=$tixeo; Expected=$tixeo },
+    @{ Body=$tixeo; Location=$tixeo.Replace('Example123','Example456'); Expected=$null },
+    @{ Body=$tixeo.Replace('Example123',''); Location=''; Expected=$null },
+    @{ Body="$tixeo&umi=Second"; Location=''; Expected=$null },
+    @{ Body=$tixeo.Replace('video.example.org','video.example.org.invalid'); Location=''; Expected=$null },
+    @{ Body=$tixeo.Replace('https://','https://person@'); Location=''; Expected=$null },
+    @{ Body="https://example.net/?next=$tixeo"; Location=''; Expected=$null }
+)) {
+    if ((Get-MeetingJoinUrl $sample Tixeo $origin) -cne $sample.Expected) { throw 'Unexpected Tixeo join URL selection.' }
+}
 $session = (New-Object -ComObject Outlook.Application).Session
 $drafts = $session.GetDefaultFolder(16)
 foreach ($operation in 'draft','meeting') {
@@ -47,7 +61,23 @@ foreach ($operation in 'draft','meeting') {
             $refusal = ''
             try { $null = & $script -Action send-meeting -Id $receipt.id -ToSelf }
             catch { $refusal = $_.Exception.Message }
-            if ($refusal -notlike '*No verified Zoom link*') { throw 'Expected an unverified meeting to be refused.' }
+            if ($refusal -notlike '*verified video link receipt*') { throw 'Expected an unverified meeting to be refused.' }
+            # Exercise the real Outlook inspector on this test appointment only.
+            $item.Display($false)
+            $store = $folder.StoreID
+            if (!(Find-MeetingInspector $session.Application $store $receipt.id)) { throw 'Test inspector not found.' }
+            if (!(Close-SubmittedMeeting $session.Application $store $receipt.id)) { throw 'Test inspector stayed open.' }
+            # Tixeo link in the persisted item, then changed underneath its receipt.
+            $item = $session.GetItemFromID($receipt.id,$store)
+            $item.Body = $tixeo
+            $item.Save()
+            if (!(Save-MeetingLinkProof $session $item Tixeo $origin @())) { throw 'Tixeo receipt missing.' }
+            $item = $session.GetItemFromID($receipt.id,$store)
+            $item.Body = ''
+            $item.Save()
+            $refusal = ''
+            try { $null = & $script -Action send-meeting -Id $receipt.id -ToSelf } catch { $refusal = $_.Exception.Message }
+            if ($refusal -notlike '*verified Tixeo link is missing*' -or $item.UserProperties.Find('WhiteCodeSubmitAttempt')) { throw 'Expected changed link to block submission.' }
         }
     } finally { $item.Delete() }
 }

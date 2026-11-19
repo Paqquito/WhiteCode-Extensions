@@ -48,7 +48,7 @@ function Invoke-Outlook {
     catch { throw 'Open classic Outlook for Windows with a configured profile.' }
     $session = $app.Session
     if ($session.Accounts.Count -lt 1) { throw 'No configured Outlook account.' }
-    if ($SendInvitation -and ($Action -ne 'meeting' -or $VideoProvider -ne 'Zoom')) { throw 'SendInvitation requires a new Zoom meeting.' }
+    if ($SendInvitation -and ($Action -ne 'meeting' -or !$VideoProvider)) { throw 'SendInvitation requires a new Zoom or Tixeo meeting.' }
     if ($ToSelf) {
         if ($Action -notin 'meeting','send-meeting','draft','send-draft' -or $To.Count -or $Cc.Count -or $Bcc.Count) { throw 'ToSelf requires a mail draft or meeting with no other recipients.' }
         $self = Get-AttendeeKey $session.CurrentUser 1
@@ -56,7 +56,7 @@ function Invoke-Outlook {
     }
     if ($Bcc.Count -and $Action -notin 'draft','send-draft') { throw 'Bcc applies only to mail drafts.' }
     if ($Action -eq 'send-draft') { return Submit-OutlookDraft $session $Id $Subject $To $Cc $Bcc }
-    if ($Action -eq 'send-meeting') { return Submit-ZoomMeeting $session $Id $To $Cc }
+    if ($Action -eq 'send-meeting') { return Submit-VideoMeeting $session $Id $To $Cc }
     if ($SendInvitation -and !$To.Count -and !$Cc.Count) { throw 'Specify the intended recipients before scheduling.' }
     if ($Action -eq 'status') {
         $video = @($app.COMAddIns | Where-Object { $_.Connect -and $_.ProgId -match 'zoom|teams|tixeo|webex' } | ForEach-Object { $_.ProgId })
@@ -200,7 +200,8 @@ function Invoke-Outlook {
         catch { $result.openError='Saved. Open the item in Outlook.' }
     }
     if ($VideoProvider) {
-        $originalLinks = @(Get-ZoomLinks "$Body`n$Location")
+        $origin = if ($VideoProvider -eq 'Tixeo') { Get-TixeoOrigin }
+        $originalLinks = @(if ($VideoProvider -eq 'Zoom') { Get-ZoomLinks "$Body`n$Location" } else { Get-TixeoLinks "$Body`n$Location" $origin })
         $result.videoProvider = $VideoProvider
         $result.videoStatus = 'manual-action-required'
         if ($result.opened) {
@@ -219,9 +220,10 @@ function Invoke-Outlook {
                     } elseif ($process.ExitCode -eq 5) {
                         $result.videoStatus = 'addin-command-disabled'
                     } elseif ($process.ExitCode -eq 0) {
-                        $result.videoStatus = if ($VideoProvider -eq 'Zoom') { 'check-open-invitation' } else { 'tixeo-enabled' }
-                        if ($VideoProvider -eq 'Zoom') {
-                            if (Save-ZoomLinkProof $session $item $originalLinks) { $result.videoStatus = 'zoom-link-verified' }
+                        $result.videoStatus = 'check-open-invitation'
+                        if ($VideoProvider -eq 'Tixeo') { $item.Save() }
+                        if (Save-MeetingLinkProof $session $item $VideoProvider $origin $originalLinks) {
+                            $result.videoStatus = $VideoProvider.ToLowerInvariant() + '-link-verified'
                         }
                     }
                 } finally { $process.Dispose() }
@@ -230,8 +232,8 @@ function Invoke-Outlook {
     }
     if ($SendInvitation) {
         $result.submission = @{ status='not-submitted' }
-        if ($result.videoStatus -eq 'zoom-link-verified') {
-            try { $result.submission = Submit-ZoomMeeting $session $result.id $To $Cc }
+        if ($result.videoStatus -in 'zoom-link-verified','tixeo-link-verified') {
+            try { $result.submission = Submit-VideoMeeting $session $result.id $To $Cc }
             catch { $result.submission = @{status='check-outlook'; detail=$_.Exception.Message} }
         }
     }
