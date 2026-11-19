@@ -20,7 +20,9 @@ $drafts = $session.GetDefaultFolder(16)
 foreach ($operation in 'draft','meeting') {
     $subject = 'WhiteCode Outlook test ' + [guid]::NewGuid()
     $parameters = @{ Action=$operation; Subject=$subject; Body="First line. O'Brien."; Start='2027-01-06T10:00:00+01:00'; End='2027-01-06T10:30:00+01:00'; VideoUrl='https://example.org/meeting' }
-    $receipt = & $script @parameters | ConvertFrom-Json
+    if ($operation -eq 'meeting') {
+        $receipt = & (Join-Path $PSScriptRoot '../plugins/outlook/skills/visio/meeting.ps1') -Action meeting -Subject $subject -Body $parameters.Body -Start $parameters.Start -End $parameters.End -VideoUrl $parameters.VideoUrl | ConvertFrom-Json
+    } else { $receipt = & $script @parameters | ConvertFrom-Json }
     $item = $session.GetItemFromID($receipt.id, $drafts.StoreID)
     if ($item.Subject -ne $subject -or $item.Recipients.Count -ne 0) { throw 'Unexpected test item.' }
     try {
