@@ -1,44 +1,36 @@
-# WhiteCode-Extensions
+# WhiteCode Extensions
 
-Catalogue de plugins de WhiteCode.
+Ce dépôt contient les extensions Bureautique et Outlook pour WhiteCode, ainsi que le module GitLab de [WhiteCode Desktop](https://github.com/Paqquito/WhiteCode-Desktop#readme).
 
-## Catalogue de plugins
+## Installer une extension
 
-`.claude-plugin/marketplace.json` est le catalogue que WhiteCode ajoute comme source par défaut au premier lancement, épinglé sur un tag (`vX.Y.Z`). Un plugin s'installe par `git clone`, sans rien construire sur le poste : tout ce qu'il exécute doit être versionné, déjà construit.
+Dans le desktop, ouvrez **Plugins et skills**, choisissez l’extension, cliquez sur **Installer**, puis activez-la. Git doit être disponible sur le poste.
 
-| Plugin | Dossier | Contenu |
-|---|---|---|
-| Bureautique (`whitecode-office`) | `plugins/office/` | 4 skills (Word, Excel, PowerPoint, PDF) et `office.cjs`, le runtime qui embarque exceljs, docx, pptxgenjs et pdf-lib |
-| Outlook (`whitecode-outlook`) | `plugins/outlook/` | Recherche par période et mots-clés, lecture, synthèses, brouillons et invitations dans Outlook classique pour Windows |
+Le catalogue par défaut pointe sur le tag `v1.1.0`, qui contient Bureautique. Pour installer **Outlook** depuis la branche `main`, ouvrez **Sources du catalogue**, saisissez `main` dans le champ de référence du catalogue officiel et cliquez sur **Actualiser la source**. Vous pourrez alors installer Outlook.
 
-### Utiliser Outlook
+| Extension | Prérequis | Exemple de demande |
+| --- | --- | --- |
+| [Bureautique](plugins/office/) | Le moteur de génération est livré avec l’extension. | « Transforme le README en document Word et joins-le. » Formats disponibles : Word, Excel, PowerPoint et PDF. |
+| [Outlook](plugins/outlook/) | Outlook classique pour Windows avec un profil connecté. Pour une visioconférence, le complément correspondant doit être configuré dans Outlook. | « Résume mes mails depuis lundi » ou « Prépare une réunion Zoom de 30 minutes demain matin avec les participants suivants… » |
 
-Lorsqu’une réunion demandée chevauche un engagement de l’organisateur ou d’une personne invitée (obligatoire ou facultative), le desktop affiche un panneau de choix avant d’ouvrir Outlook ou de créer un lien de visio. Il propose jusqu’à trois créneaux de même durée, recherchés après l’horaire demandé sur sept jours calendaires, du lundi au vendredi entre 9 h et 18 h, heure locale. Vous pouvez aussi conserver l’horaire demandé, saisir un autre horaire ou passer. Le script revérifie les disponibilités avant l’enregistrement. Les agendas non publiés sont signalés, y compris sur les propositions dont la disponibilité reste à confirmer.
+Les extraits de mails lus entrent dans la conversation avec le fournisseur de modèle sélectionné. Choisissez un fournisseur autorisé à traiter ces messages. Outlook prépare un brouillon et vérifie les destinataires avant un envoi demandé explicitement. Pour une réunion, le desktop propose d’autres créneaux en cas de conflit et le complément vérifie le lien de visioconférence avant l’envoi.
 
-Installez et activez **Outlook** dans le catalogue des extensions sur une révision qui contient le plugin. Le plugin utilise le profil Outlook classique de la session Windows. Le nouvel Outlook et Outlook Web ne fournissent pas cette interface. Aucun jeton ni service supplémentaire à configurer.
+## Configurer GitLab
 
-Demandez par exemple « Résume ma boîte de réception depuis lundi et liste les décisions », « Cherche budget dans les messages envoyés la semaine dernière » ou « Prépare deux brouillons séparés pour les destinataires suivants ». La recherche porte sur les champs du message et le corps en texte brut. Elle couvre le dossier demandé du compte par défaut, avec pagination. Les extraits lus entrent dans la conversation avec le fournisseur de modèle sélectionné. Pour une boîte professionnelle, choisissez un fournisseur autorisé à traiter ses messages.
+Le [module GitLab](modules/gitlab/) est intégré lorsque l’identité du desktop inclut `gitlab`. Dans **Paramètres → GitLab**, renseignez l’URL HTTPS de l’instance et un jeton personnel avec le droit `read_api` pour la consultation ou `api` pour les écritures. Ouvrez **Panneaux → GitLab** pour choisir le projet et la demande de fusion. Le desktop demande confirmation avant chaque écriture.
 
-Pour un mail en deux temps, demandez « Prépare un brouillon à mon adresse », puis « Envoie ce brouillon uniquement à mon adresse ». L’extension rouvre le message enregistré et vérifie son objet ainsi que les destinataires en À, Cc et Cci avant soumission à Outlook. Si les destinataires ou leurs rôles ont changé, le brouillon est conservé.
+## Modifier et tester les extensions
 
-Pour une réunion, précisez les participants, la date, l’heure et la durée. L’extension prépare l’invitation dans le calendrier personnel avec le statut « Occupé ». Le contrôle prend aussi en compte les réunions actives du calendrier de l’organisateur marquées « Disponible », y compris celles créées par une ancienne version de l’extension. Pour Zoom, elle actionne le ruban Outlook, valide « Continuez » si Zoom affiche cette fenêtre, puis relit le corps et l’emplacement du rendez-vous enregistré pour confirmer le lien de participation. Vous pouvez alors relire l’invitation ou demander son envoi. Si le lien manque ou si plusieurs réunions figurent dans l’invitation, l’extension signale le problème et conserve le brouillon. Pour Tixeo, l’extension active « Réunion en ligne » et vérifie que le complément a ajouté un lien de participation sur le serveur configuré dans le client Tixeo. Si le bouton est grisé ou si le complément ne fournit pas le lien avant l’envoi, elle conserve le brouillon.
+Depuis la racine du dépôt, avec Bun 1.4.2 :
 
-### Générer un document
-
-Une fois le plugin Bureautique installé et activé, demandez par exemple « Transforme le README.md en document Word et joins-le ». Le modèle charge le skill avec `use_skill` puis utilise le runtime livré dans l’extension. La commande `office.cjs --convert README.md note.docx donnees.xlsx revue.pptx fiche.pdf` génère les sorties demandées à partir des mêmes passages. Les tableaux restent numériques dans Excel et les actions ouvertes conservent leur libellé. Le champ `attach_files` de la commande déclenche leur livraison dans le tour en cours. Le runtime préserve les fichiers existants. Les entrées JSON et le mode script restent disponibles pour des mises en page personnalisées.
-
-### Modifier la Bureautique
-
-```bash
+```sh
 bun install --frozen-lockfile
-bun run build:office   # reconstruit plugins/office/office.cjs et THIRD_PARTY_NOTICES.txt
-bun test plugins
+bun run build:office
+bun run test
 ```
 
-Committez `office.cjs` avec la modification, augmentez la version dans `plugins/office/.claude-plugin/plugin.json`, `extension.json` et `marketplace.json`, puis posez un nouveau tag. WhiteCode ne change de version que lorsque l'utilisateur actualise la source sur ce tag.
+La construction de Bureautique régénère `office.cjs` et ses notices. Le [manifeste du catalogue](.claude-plugin/marketplace.json) indique les extensions distribuées.
 
-## Module natif GitLab
+## Licence
 
-Le dossier `modules/gitlab` est compilé dans les distributions qui choisissent `gitlab` dans leur identité desktop. Dans Paramètres → GitLab, saisissez l’URL HTTPS de l’instance et un jeton personnel avec le droit `read_api` pour consulter les demandes de fusion, ou `api` pour les modifier selon les permissions du compte. Dans **Panneaux → GitLab**, choisissez le projet et ouvrez les actions de la demande. Vous pouvez créer ou modifier un brouillon, le passer prêt, commenter une ligne, résoudre une discussion, agir sur les jobs et le pipeline, ou fusionner la révision affichée. Une boîte de dialogue native confirme le compte, le projet et les paramètres avant chaque écriture. La fusion transmet le SHA à GitLab. Les paramètres de compte sont protégés par le coffre du système. Lancez `bun run test` pour vérifier le module et Bureautique.
-
-Une demande explicite comme « Crée une réunion Zoom demain à 13 h et envoie-moi l’invitation uniquement à mon adresse » autorise l’envoi après relecture du lien et des destinataires. Vous pouvez aussi demander l’envoi dans un second message pour un rendez-vous Zoom préparé avec Outlook 1.3.0 ou ultérieur. La version 1.5.0 prend aussi en charge les invitations Tixeo vérifiées. Après confirmation de l’envoi par Outlook, l’extension ferme la fenêtre de la réunion. Un brouillon Zoom est enregistré dans le calendrier et sa fenêtre se ferme automatiquement. Pour le relire à l’écran, demandez explicitement de le laisser ouvert. Si le créneau Zoom est déjà terminé, l’assistant demande un nouvel horaire avant d’ouvrir Outlook. Si Zoom signale cette erreur pendant la préparation, l’extension ferme l’alerte et la fenêtre de la réunion en conservant le brouillon enregistré.
+Le catalogue, les deux extensions et le module GitLab sont sous [licence MIT](LICENSE). Chaque composant installable contient sa licence. Les [notices des bibliothèques de Bureautique](plugins/office/THIRD_PARTY_NOTICES.txt) accompagnent son moteur de génération.

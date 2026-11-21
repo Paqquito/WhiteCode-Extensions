@@ -52,6 +52,12 @@ test('le manifeste, le catalogue et les licences sont cohérents', async () => {
   const catalogue = JSON.parse(await readFile(join(PLUGIN, '..', '..', '.claude-plugin', 'marketplace.json'), 'utf8'))
   const entry = catalogue.plugins.find((item: { name: string }) => item.name === manifest.name)
   expect(entry.version).toBe(manifest.version)
+  expect(entry.license).toBe('MIT')
+  expect(await readFile(join(PLUGIN, 'LICENSE'), 'utf8')).toContain('2026 Paqquito and contributors')
   const notices = await readFile(join(PLUGIN, 'THIRD_PARTY_NOTICES.txt'), 'utf8')
   for (const name of ['exceljs', 'docx', 'pptxgenjs', 'pdf-lib']) expect(notices).toContain(`## ${name} `)
+  for (const name of ['binary', 'buffers', 'chainsaw', 'hash.js', 'https', 'isarray', 'saxes']) {
+    const section = notices.split(/^## /m).find(text => text.startsWith(name + ' '))
+    expect(section).toMatch(/permission (?:is hereby granted|to use)/i)
+  }
 })
