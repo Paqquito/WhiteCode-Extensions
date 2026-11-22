@@ -23,6 +23,8 @@ Répondez avec la date, l’expéditeur et l’objet obtenus. Pour une lecture o
 
 Les dates sont locales, la borne de fin est exclue. Calculez les dates demandées au moment de l’appel. Sans dates, la recherche couvre aujourd’hui. Omettez Query pour une synthèse générale. Pour la semaine en cours commencez le lundi. Pour sept jours glissants commencez six jours avant aujourd’hui. Par défaut cherchez dans la réception ; ajoutez `-Folder sent` pour les échanges sortants. `-Action folders` liste les sous-dossiers ; passez par exemple `-Subfolder @('Projets','Budget')` pour cibler une branche. Le compte et les dossiers par défaut du profil Outlook sont utilisés.
 
+Pour un dossier d’archive ou une autre boîte, `-Action browse-folders` liste les racines accessibles. Pour descendre d’un niveau, passez `-StoreId` et `-FolderId` renvoyés pour le parent. Ces deux identifiants ciblent aussi le dossier exact pour `search`, `latest` et `read`. Une recherche en direct reflète le contenu actuel d’Outlook.
+
 Chaque page renvoie des extraits et `nextOffset`. Tant que celui-ci est renseigné, poursuivez avec les mêmes paramètres et `-Offset`, y compris après une page vide. Dédupliquez par ID. Pour lire le corps en texte brut, utilisez `-Action read -Id '…'` avec le même dossier, puis paginez les longs corps. Distinguez décisions, actions, échéances et questions ouvertes. Citez objet, expéditeur et date. Si la lecture est partielle, précisez les dates, dossiers et limites de couverture. Aucune pièce jointe n’est ouverte.
 
 ### Préparer dans Outlook

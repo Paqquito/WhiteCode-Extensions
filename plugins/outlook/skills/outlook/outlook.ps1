@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)][ValidateSet('status','folders','latest','search','read','draft','send-draft','availability','meeting','send-meeting')][string]$Action,
+    [Parameter(Mandatory)][ValidateSet('status','browse-folders','stream-messages','folders','latest','search','read','draft','send-draft','availability','meeting','send-meeting')][string]$Action,
     [ValidateSet('inbox','sent')][string]$Folder = 'inbox',
     [string[]]$Subfolder = @(),
     [string]$FromDate, [string]$UntilDate, [string]$Query = '',
@@ -11,10 +11,11 @@ param(
     [string]$Start, [string]$End, [string]$Location, [string]$VideoUrl,
     [ValidateSet('Zoom','Tixeo')][string]$VideoProvider,
     [switch]$Open, [switch]$SendInvitation, [switch]$ToSelf,
-    [string]$KeepSlot
+    [string]$KeepSlot, [string]$StoreId, [string]$FolderId
 )
 $ErrorActionPreference = 'Stop'
 $culture = [Globalization.CultureInfo]::InvariantCulture
+. (Join-Path $PSScriptRoot 'mail-source.ps1')
 . (Join-Path $PSScriptRoot 'meeting-send.ps1')
 . (Join-Path $PSScriptRoot 'availability.ps1')
 . (Join-Path $PSScriptRoot 'mail-send.ps1')
@@ -76,12 +77,21 @@ function Invoke-Outlook {
         $video = @($app.COMAddIns | Where-Object { $_.Connect -and $_.ProgId -match 'zoom|teams|tixeo|webex' } | ForEach-Object { $_.ProgId })
         return @{ outlookVersion=$app.Version; accountCount=$session.Accounts.Count; videoAddIns=$video }
     }
-    if ($Action -in 'folders','latest','search','read') {
-        $folderType = if ($Folder -eq 'inbox') { 6 } else { 5 }
-        $source = $session.GetDefaultFolder($folderType)
-        foreach ($part in $Subfolder) { $source = $source.Folders.Item($part) }
+    if ($Action -eq 'browse-folders' -and !$FolderId -and !$StoreId) {
+        return @{folders=@(Get-OutlookRoots $session)}
+    }
+    if ($Action -in 'folders','browse-folders','latest','search','read','stream-messages') {
+        if ($Action -eq 'stream-messages' -and (!$StoreId -or !$FolderId -or !$FromDate -or !$UntilDate)) {
+            throw 'Select a folder and an explicit date range.'
+        }
+        $source = Get-OutlookFolder $session $StoreId $FolderId $Folder $Subfolder
+        if ($Action -eq 'browse-folders') {
+            return @{folders=@(foreach ($child in $source.Folders) { Get-OutlookFolderInfo $child })}
+        }
+        if ($Action -in 'latest','search','stream-messages') {
+            $property = if ($StoreId) { Get-OutlookMailDateField $source } elseif ($Folder -eq 'sent') { 'SentOn' } else { 'ReceivedTime' }
+        }
         if ($Action -eq 'latest') {
-            $property = if ($Folder -eq 'sent') { 'SentOn' } else { 'ReceivedTime' }
             $items = $source.Items
             $items.Sort("[$property]",$true)
             for ($item=$items.GetFirst(); $null -ne $item; $item=$items.GetNext()) {
@@ -107,11 +117,12 @@ function Invoke-Outlook {
         $today = [datetime]::Today
         $first = Get-Day $FromDate $today
         $last = Get-Day $UntilDate ($today.AddDays(1))
-        if ($last -le $first) { throw 'UntilDate must be later than FromDate (exclusive).' }
-        $property = if ($Folder -eq 'sent') { 'SentOn' } else { 'ReceivedTime' }
-        # Jet date literals use the Outlook user's regional short date and time.
-        $filter = "[$property] >= '" + $first.ToString('g') + "' AND [$property] < '" + $last.ToString('g') + "'"
-        $items = $source.Items.Restrict($filter)
+        $items = Get-OutlookPeriodItems $source $property $first $last
+        if ($Action -eq 'stream-messages') {
+            if ($source.DefaultItemType -ne 0) { throw 'Select a mail folder.' }
+            Read-OutlookMailStream $source $items $property $first $last
+            return
+        }
         $items.Sort("[$property]",$true)
         $count = $items.Count
         $cursor = $Offset
@@ -128,7 +139,7 @@ function Invoke-Outlook {
             $hits += @{ id=$item.EntryID; subject=$item.Subject; sender=$item.SenderName; at=([datetime]$item.$property).ToString('o'); excerpt=$excerpt }
         }
         $next = if ($cursor -lt $count) { $cursor }
-        return @{ folder=$Folder; subfolder=$Subfolder; from=$first.ToString('yyyy-MM-dd'); until=$last.ToString('yyyy-MM-dd'); results=$hits; nextOffset=$next }
+        return @{ folder=$(if ($StoreId) { $source.FolderPath } else { $Folder }); subfolder=$Subfolder; from=$first.ToString('yyyy-MM-dd'); until=$last.ToString('yyyy-MM-dd'); results=$hits; nextOffset=$next }
     }
     if ($Action -eq 'availability') {
         $starts = Get-Instant $Start
@@ -302,4 +313,5 @@ function Invoke-Outlook {
     }
     return $result
 }
-Invoke-Outlook | ConvertTo-Json -Compress -Depth 5
+if ($Action -eq 'stream-messages') { Invoke-Outlook }
+else { Invoke-Outlook | ConvertTo-Json -Compress -Depth 5 }
